@@ -23,14 +23,9 @@
         { label: "View Manpage", url: "https://github.com/bkazemi/trop/blob/master/trop.1", external: true },
       ],
       description:
-        "trop is a shell script designed to make interaction with\n" +
-        "transmission-remote easier. It features options to get\n" +
-        "information about tr-remote torrents by seeding torrents\n" +
-        "or by a specific set of tracker URLs. This project aims to\n" +
-        "provide information from transmission-remote to the user\n" +
-        "in a clean way, and make doing common tasks more automatic,\n" +
-        "interchangeably through command-line or scripts. The code\n" +
-        "is written to be as POSIX compliant as possible.",
+        "trop is a shell script designed to make interaction with transmission-remote easier.\n\n" +
+        "It features options to get information about tr-remote torrents by seeding torrents or by a specific set of tracker URLs. This project aims to provide information from transmission-remote to the user in a clean way, and make doing common tasks more automatic, interchangeably through command-line or scripts.\n\n" +
+        "The code is written to be as POSIX compliant as possible.",
     },
     gopoker: {
       name: "gopoker",
@@ -48,6 +43,12 @@
         "  ▀▀▀▜██▍ ▝█▀████████▛█▛ ▕████▛▀▘   ▔▀▀█▛▀▀  ▕▀▀▘  ▀▀▀▎  ▀▀▜██▀▘  ▕▀▀▘\n" +
         " ▂▂▃▅██▛   ▝▆████▜██▙▅▔  ▕██▌\n" +
         "▕████▀▀      ▔▀▀▀▝▀▀▔    ▕██▌",
+      asciiArtMobile:
+        "                   ▕█\n" +
+        "▅▇▇▋ ▄▇▇▆▂ ▇▛▇▖▗▇▇▆▕█▗▇▘▅▇▇▖▕▆▇▀\n" +
+        "█▎▐▋▐█████▍█▍▐▊▐▌▕█▕██▌ █▇▇▊▕█▏\n" +
+        "▝▜█▋▐█████▌█▇█▘▝█▇▛▕█▝█▖▀▇▆▎▕█▏\n" +
+        "▗▆█▘ ▝▜▜▛▘ █▍",
       description: "a poker game made in golang.",
       cta: { label: "try it here", url: "https://poker.shirkadeh.org", external: true },
     },
@@ -56,7 +57,6 @@
       routePath: "/projects/shakar",
       padCatOutput: true,
       padBeforeLinkBar: true,
-      wrapWidth: 88,
       description:
         "A subjectful scripting language.\n\n" +
         "Shakar is a work-in-progress general-purpose scripting language. It targets boilerplate like repeated variable names, defensive null checks, and verbose read-transform-write cycles. Its core idea is subjectful flow, where the language tracks what you're operating on so you don't have to repeat it. Chains, guards, fan-outs, and apply-assign all share a single implicit-subject model that keeps code compact without hiding control flow.\n\n" +
@@ -82,7 +82,7 @@
 
   const LAST_LOGIN_KEY = "bkazemi_terminal_last_login_ms";
   const host = window.location.hostname || "localhost";
-  const shortHost = host.split(".")[0] || "localhost";
+  const hostSegment = host.split(".")[0] || "localhost";
 
   const state = {
     cwd: "/",
@@ -94,7 +94,7 @@
     '  <form id="terminal-form" class="input-wrap" autocomplete="off">',
     '    <div class="input-row">',
     '      <label class="input-prompt" for="terminal-input" id="active-prompt"></label>',
-    '      <input id="terminal-input" class="cmd-input" type="text" spellcheck="false" aria-label="Terminal command" />',
+    '      <textarea id="terminal-input" class="cmd-input" rows="1" wrap="soft" spellcheck="false" autofocus aria-label="Terminal command"></textarea>',
     "    </div>",
     "  </form>",
     "</main>",
@@ -255,8 +255,15 @@
     return cwd === "/projects" ? "/projects" : "/";
   }
 
+  function syncPromptWidth() {
+    const promptWidth = Math.ceil(promptEl.getBoundingClientRect().width);
+    formEl.style.setProperty("--prompt-width", `${promptWidth}px`);
+  }
+
   function promptText() {
-    return `bkazemi@${shortHost}:${state.cwd}$`;
+    const mobile = window.matchMedia("(max-width: 700px)").matches;
+    const displayHost = mobile ? hostSegment[0] : hostSegment;
+    return `bkazemi@${displayHost}:${state.cwd}$`;
   }
 
   function normalizeCdArg(arg) {
@@ -273,6 +280,15 @@
 
   function setPrompt() {
     promptEl.textContent = promptText();
+    syncPromptWidth();
+  }
+
+  function resizeInput() {
+    inputEl.style.height = "0px";
+    const lineHeight = Number.parseFloat(window.getComputedStyle(inputEl).lineHeight) || 0;
+    const nextHeight = Math.max(inputEl.scrollHeight, lineHeight);
+    inputEl.style.height = `${nextHeight}px`;
+    ensureInputVisible();
   }
 
   function syncPathForRoute(routePath, replace = false) {
@@ -316,6 +332,18 @@
     screenEl.scrollTop = screenEl.scrollHeight;
   }
 
+  function ensureInputVisible() {
+    const screenRect = screenEl.getBoundingClientRect();
+    const formRect = formEl.getBoundingClientRect();
+    const margin = 12;
+    const isOutOfView =
+      formRect.bottom > screenRect.bottom - margin || formRect.top < screenRect.top + margin;
+
+    if (isOutOfView) {
+      scrollToBottom();
+    }
+  }
+
   function appendLine(text, className = "") {
     const p = document.createElement("p");
     p.className = `line ${className}`.trim();
@@ -336,51 +364,24 @@
     appendHTMLLine("&nbsp;");
   }
 
-  function wrapLineToWidth(line, width) {
-    const trimmed = line.trim();
-    if (!trimmed || !Number.isFinite(width) || width < 20) {
-      return line;
+  function projectAsciiArt(project) {
+    if (!project.asciiArt) {
+      return "";
     }
 
-    const words = trimmed.split(/\s+/);
-    const lines = [];
-    let current = "";
-
-    for (const word of words) {
-      if (!current) {
-        current = word;
-      } else if (current.length + 1 + word.length <= width) {
-        current += ` ${word}`;
-      } else {
-        lines.push(current);
-        current = word;
-      }
+    if (!project.asciiArtMobile) {
+      return project.asciiArt;
     }
 
-    if (current) {
-      lines.push(current);
-    }
-
-    return lines.join("\n");
-  }
-
-  function wrapTextBlock(text, width) {
-    if (!Number.isFinite(width) || width < 20) {
-      return text;
-    }
-
-    return text
-      .split("\n")
-      .map((line) => wrapLineToWidth(line, width))
-      .join("\n");
+    return window.matchMedia("(max-width: 700px)").matches ? project.asciiArtMobile : project.asciiArt;
   }
 
   function appendCommand(command) {
     const row = document.createElement("div");
-    row.className = "line input-row command-row";
+    row.className = "line command-row";
     row.innerHTML =
       `<span class="input-prompt">${escapeHtml(promptText())}</span>` +
-      `<span class="cmd">${escapeHtml(command)}</span>`;
+      `<span class="cmd"> ${escapeHtml(command)}</span>`;
     outputEl.appendChild(row);
     scrollToBottom();
   }
@@ -535,27 +536,32 @@
 
   function doCd(arg) {
     const normalizedArg = normalizeCdArg(arg);
+    const strippedDotPath = normalizedArg.startsWith("./") ? normalizedArg.slice(2) : normalizedArg;
 
-    if (!normalizedArg || normalizedArg === "~" || normalizedArg === "/") {
+    if (!strippedDotPath || strippedDotPath === "~" || strippedDotPath === "/") {
       setCwd("/", true);
       return { ok: true };
     }
 
-    if (normalizedArg === "..") {
+    if (strippedDotPath === ".") {
+      return { ok: true };
+    }
+
+    if (strippedDotPath === "..") {
       setCwd("/", true);
       return { ok: true };
     }
 
     if (
-      normalizedArg === "projects" ||
-      normalizedArg === "/projects"
+      strippedDotPath === "projects" ||
+      strippedDotPath === "/projects"
     ) {
       setCwd("/projects", true);
       return { ok: true };
     }
 
-    if (normalizedArg.startsWith("/")) {
-      const routeState = routePathToState(normalizedArg);
+    if (strippedDotPath.startsWith("/")) {
+      const routeState = routePathToState(strippedDotPath);
       if (routeState && !routeState.projectSlug && !routeState.rootFile) {
         setCwd(routeState.cwd, true);
         return { ok: true };
@@ -615,6 +621,7 @@
 
     if (target.type === "about") {
       appendLine(aboutText);
+      appendBlankLine();
       appendHTMLLine(
         `GitHub: ${buildAnchorHtml("https://github.com/bkazemi", "github.com/bkazemi", true)}`
       );
@@ -639,18 +646,21 @@
       }
 
       if (project.separator) {
-        appendLine(project.separator, "muted");
+        appendLine(project.separator, "muted separator-line");
       }
 
-      if (project.asciiArt) {
-        appendLine(project.asciiArt);
+      const asciiArt = projectAsciiArt(project);
+      if (asciiArt) {
+        appendLine(asciiArt);
         if (project.padAfterAscii) {
           appendBlankLine();
         }
       }
 
-      const wrappedDescription = wrapTextBlock(project.description, project.wrapWidth);
-      appendLine(wrappedDescription);
+      const paragraphs = project.description.split("\n\n");
+      for (const para of paragraphs) {
+        appendLine(para, "desc-para");
+      }
 
       if (project.cta) {
         appendHTMLLine(
@@ -692,7 +702,7 @@
       return { ok: false };
     }
 
-    window.location.assign(toAppPath(project.routePath));
+    simulateProjectClick(arg);
     return { ok: true };
   }
 
@@ -704,6 +714,7 @@
     appendLine("cd .. | cd ~ | cd / | cd projects | cd /projects");
     appendLine("cat <path>");
     appendLine("xdg-open <project>");
+    appendLine("home");
     appendLine("clear");
     appendLine("Use && to chain commands (example: cd /projects && ls)", "muted");
     return { ok: true };
@@ -740,6 +751,12 @@
 
     if (name === "xdg-open" || name === "open") {
       return doXdgOpen(arg, name);
+    }
+
+    if (name === "home") {
+      doClear();
+      setCwd("/", true);
+      return doLs();
     }
 
     if (name === "help" || name === "?") {
@@ -859,7 +876,7 @@
     }
 
     appendLine("Type 'help' for available commands.", "muted");
-    appendLine("");
+    appendBlankLine();
 
     writeLastLoginMs(nowMs);
   }
@@ -868,7 +885,8 @@
     appendCommand(`file ${pathname}`);
     appendLine(`file: cannot open '${pathname}' (No such file or directory)`, "error");
     appendLine("404 not found", "error");
-    appendLine("Try: cd / && ls  or  cd /projects && ls", "muted");
+    inputEl.value = "clear && cd / && ls";
+    resizeInput();
   }
 
   function renderRoute(pathname, withBoot = false) {
@@ -934,7 +952,33 @@
     runCommandLine(command);
     inputEl.value = "";
     setPrompt();
+    resizeInput();
     inputEl.focus();
+  });
+
+  inputEl.addEventListener("input", () => {
+    resizeInput();
+  });
+
+  inputEl.addEventListener("keydown", (event) => {
+    const isPlainEnter =
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey;
+
+    if (!isPlainEnter) {
+      return;
+    }
+
+    event.preventDefault();
+    if (typeof formEl.requestSubmit === "function") {
+      formEl.requestSubmit();
+      return;
+    }
+
+    formEl.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
 
   screenEl.addEventListener("click", (event) => {
@@ -944,7 +988,7 @@
     }
 
     const target = event.target;
-    if (target instanceof HTMLElement && target.closest("a,button,input,label")) {
+    if (target instanceof HTMLElement && target.closest("a,button,input,textarea,label")) {
       return;
     }
 
@@ -955,6 +999,11 @@
     renderRoute(window.location.pathname, false);
   });
 
+  window.addEventListener("resize", () => {
+    setPrompt();
+    resizeInput();
+  });
+
   const strippedPath = normalizePathname(stripBasePath(window.location.pathname));
   const inferredPath = inferRoutePath(window.location.pathname);
   if (strippedPath !== inferredPath) {
@@ -962,5 +1011,6 @@
   }
 
   setPrompt();
+  resizeInput();
   renderRoute(window.location.pathname, true);
 })();

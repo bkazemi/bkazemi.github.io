@@ -55,7 +55,9 @@ body {
   padding: 24px 24px 0;
   line-height: 1.6;
   white-space: pre-wrap;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: none;
 }
 
 .line {
@@ -63,9 +65,17 @@ body {
   line-height: 1.6;
 }
 
+.desc-para {
+  white-space: normal;
+  max-width: 72ch;
+}
+
+.desc-para + .desc-para {
+  margin-top: 0.8em;
+}
+
 .cmd {
   color: var(--text);
-  flex: 1;
 }
 
 .muted {
@@ -74,6 +84,11 @@ body {
 
 .error {
   color: var(--error);
+}
+
+.separator-line {
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .entry-list {
@@ -107,6 +122,8 @@ body {
 
 .input-wrap {
   position: relative;
+  --prompt-width: 0px;
+  --prompt-gap: 10px;
   z-index: 2;
   padding: 0 24px 24px;
   background: transparent;
@@ -114,27 +131,35 @@ body {
 }
 
 .input-row {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
+  position: relative;
   line-height: 1.6;
   min-height: 1.6em;
 }
 
 .input-prompt {
+  position: absolute;
+  inset: 0 auto auto 0;
   color: var(--accent);
-  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .cmd-input {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
+  min-width: 100%;
+  min-height: 1.6em;
+  display: block;
   background: transparent;
   border: 0;
   margin: 0;
   padding: 0;
   appearance: none;
   -webkit-appearance: none;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  text-indent: calc(var(--prompt-width) + var(--prompt-gap));
   color: var(--text);
   font: inherit;
   font-size: 1rem;
@@ -157,6 +182,40 @@ body {
   .output,
   .input-wrap,
   .no-js {
-    padding-inline: 12px;
+    padding-inline: 16px;
   }
+
+  .input-row {
+    line-height: 1.6;
+  }
+
+  .command-row {
+    line-height: 1.6;
+  }
+
+  .cmd-input {
+    min-width: 100%;
+    font-size: 16px;
+  }
+
+  .entry-list {
+    gap: 8px 12px;
+  }
+
+  .entry-link {
+    display: inline-block;
+    padding: 4px 0;
+  }
+}
+
+.command-row .input-prompt,
+.command-row .cmd {
+  position: static;
+  display: inline;
+}
+
+.command-row .cmd {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
