@@ -1,12 +1,114 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <meta charset='utf-8'>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>404 Not Found</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #050805;
+        color: #d4e8d6;
+        font-family: "IBM Plex Mono", monospace;
+      }
+      #boot-error {
+        display: none;
+        padding: 12px;
+      }
+      #app {
+        visibility: hidden;
+      }
+      #app.ready {
+        visibility: visible;
+      }
+    </style>
   </head>
   <body>
-    <b>file not found.</b>
-    <br>
-    <a title='homepage' href='/'>home</a>
+    <div id="app"></div>
+    <p id="boot-error">Failed to load terminal assets.</p>
+    <noscript>
+      <p class="no-js">This page requires JavaScript for the interactive terminal.</p>
+    </noscript>
+    <script>
+      (() => {
+        function buildCandidates(assetPath) {
+          const candidates = new Set();
+          const pathname = window.location.pathname || "/";
+          const segments = pathname.split("/").filter(Boolean);
+
+          candidates.add(`/${assetPath}`);
+          candidates.add(assetPath);
+
+          if (segments.length > 0) {
+            candidates.add(`/${segments[0]}/${assetPath}`);
+          }
+
+          const maxUps = Math.min(segments.length + 2, 10);
+          for (let i = 1; i <= maxUps; i += 1) {
+            candidates.add(`${"../".repeat(i)}${assetPath}`);
+          }
+
+          return Array.from(candidates);
+        }
+
+        const cssCandidates = buildCandidates("assets/css/terminal.css");
+        const jsCandidates = buildCandidates("assets/js/terminal-app.js");
+
+        const appEl = document.getElementById("app");
+        const bootErrorEl = document.getElementById("boot-error");
+        let revealed = false;
+
+        function revealApp() {
+          if (revealed) {
+            return;
+          }
+
+          revealed = true;
+          if (appEl) {
+            appEl.classList.add("ready");
+          }
+        }
+
+        window.setTimeout(revealApp, 1200);
+
+        function showBootError() {
+          if (bootErrorEl) {
+            bootErrorEl.style.display = "block";
+          }
+          revealApp();
+        }
+
+        function loadCssAt(index) {
+          if (index >= cssCandidates.length) {
+            return;
+          }
+
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = cssCandidates[index];
+          link.onload = revealApp;
+          link.onerror = () => loadCssAt(index + 1);
+          document.head.appendChild(link);
+        }
+
+        function loadJsAt(index) {
+          if (index >= jsCandidates.length) {
+            showBootError();
+            return;
+          }
+
+          const script = document.createElement("script");
+          script.src = jsCandidates[index];
+          script.defer = true;
+          script.onerror = () => loadJsAt(index + 1);
+          document.body.appendChild(script);
+        }
+
+        loadCssAt(0);
+        loadJsAt(0);
+      })();
+    </script>
   </body>
-<html>
+</html>
