@@ -88,8 +88,13 @@
     cwd: "/",
   };
 
+  const MAX_HISTORY_ENTRIES = 200;
   let latestRenderToken = 0;
   let isAnimating = false;
+  let isSyntheticSubmit = false;
+  const commandHistory = [];
+  let historyCursor = -1;
+  let historyDraft = "";
 
   appEl.innerHTML = [
     '<main id="screen" class="screen" aria-label="Interactive terminal">',
@@ -709,6 +714,36 @@
     return { ok: true };
   }
 
+  function doHistory(arg = "") {
+    const trimmedArg = arg.trim();
+    const visibleHistory = commandHistory.filter((entry) => {
+      const [name] = entry.split(/\s+/);
+      return name !== "history";
+    });
+    let count = visibleHistory.length;
+
+    if (trimmedArg) {
+      if (!/^\d+$/.test(trimmedArg)) {
+        appendLine("history: usage: history [n]", "error");
+        return { ok: false };
+      }
+
+      count = Number.parseInt(trimmedArg, 10);
+    }
+
+    if (!visibleHistory.length || count <= 0) {
+      return { ok: true };
+    }
+
+    const startIndex = Math.max(visibleHistory.length - count, 0);
+    for (let i = startIndex; i < visibleHistory.length; i++) {
+      const displayIndex = i + 1;
+      appendLine(`${displayIndex}  ${visibleHistory[i]}`);
+    }
+
+    return { ok: true };
+  }
+
   function doHelp() {
     appendLine("Available commands:", "muted");
     appendLine("help | ?");
@@ -717,6 +752,7 @@
     appendLine("cd .. | cd ~ | cd / | cd projects | cd /projects");
     appendLine("cat <path>");
     appendLine("xdg-open <project>");
+    appendLine("history [n]");
     appendLine("home");
     appendLine("clear");
     appendLine("Use && to chain commands (example: cd /projects && ls)", "muted");
@@ -756,6 +792,10 @@
       return doXdgOpen(arg, name);
     }
 
+    if (name === "history") {
+      return doHistory(arg);
+    }
+
     if (name === "home") {
       doClear();
       setCwd("/", true);
@@ -785,13 +825,92 @@
     }
   }
 
-  function submitTerminalForm() {
-    if (typeof formEl.requestSubmit === "function") {
-      formEl.requestSubmit();
+  function resetHistoryNavigation() {
+    historyCursor = -1;
+    historyDraft = "";
+  }
+
+  function recordHistory(command) {
+    if (!command) {
       return;
     }
 
-    formEl.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    if (commandHistory[commandHistory.length - 1] === command) {
+      return;
+    }
+
+    commandHistory.push(command);
+    if (commandHistory.length > MAX_HISTORY_ENTRIES) {
+      commandHistory.splice(0, commandHistory.length - MAX_HISTORY_ENTRIES);
+    }
+  }
+
+  function setInputValue(value) {
+    inputEl.value = value;
+    resizeInput();
+    inputEl.setSelectionRange(value.length, value.length);
+  }
+
+  function historyEntryForCursor(cursor) {
+    if (cursor < 0 || cursor >= commandHistory.length) {
+      return "";
+    }
+
+    return commandHistory[commandHistory.length - 1 - cursor];
+  }
+
+  function navigateHistoryUp() {
+    if (!commandHistory.length) {
+      return false;
+    }
+
+    if (historyCursor === -1) {
+      historyDraft = inputEl.value;
+    }
+
+    if (historyCursor >= commandHistory.length - 1) {
+      return true;
+    }
+
+    historyCursor++;
+    setInputValue(historyEntryForCursor(historyCursor));
+    return true;
+  }
+
+  function navigateHistoryDown() {
+    if (!commandHistory.length || historyCursor === -1) {
+      return false;
+    }
+
+    if (historyCursor === 0) {
+      const draft = historyDraft;
+      resetHistoryNavigation();
+      setInputValue(draft);
+      return true;
+    }
+
+    historyCursor--;
+    setInputValue(historyEntryForCursor(historyCursor));
+    return true;
+  }
+
+  function submitTerminalForm({ synthetic = false } = {}) {
+    if (synthetic) {
+      isSyntheticSubmit = true;
+    }
+
+    try {
+      if (typeof formEl.requestSubmit === "function") {
+        formEl.requestSubmit();
+        return;
+      }
+
+      formEl.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    } finally {
+      if (synthetic) {
+        isSyntheticSubmit = false;
+      }
+    }
   }
 
   function delay(ms) {
@@ -855,7 +974,7 @@
 
       await delay(beforeEnterDelayMs());
       isAnimating = false;
-      submitTerminalForm();
+      submitTerminalForm({ synthetic: true });
     } finally {
       isAnimating = false;
     }
@@ -1009,7 +1128,7 @@
   }
 
   function renderRoute(pathname, withBoot = false) {
-    latestRenderToken += 1;
+    latestRenderToken++;
     const renderToken = latestRenderToken;
     const normalized = inferRoutePath(pathname);
     const routeState = routePathToState(pathname);
@@ -1072,6 +1191,10 @@
       return;
     }
     const command = inputEl.value.trim();
+    if (!isSyntheticSubmit) {
+      recordHistory(command);
+    }
+    resetHistoryNavigation();
     appendCommand(command);
     runCommandLine(command);
     inputEl.value = "";
@@ -1085,18 +1208,28 @@
       event.target.value = "";
       return;
     }
+    resetHistoryNavigation();
     resizeInput();
   });
 
   inputEl.addEventListener("keydown", (event) => {
-    const isPlainEnter =
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.altKey &&
-      !event.ctrlKey &&
-      !event.metaKey;
+    const hasModifier = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+    const isArrowUp = event.key === "ArrowUp";
+    const isArrowDown = event.key === "ArrowDown";
 
-    if (!isPlainEnter) {
+    if (!hasModifier && (isArrowUp || isArrowDown)) {
+      if (isAnimating) {
+        return;
+      }
+
+      const didNavigate = isArrowUp ? navigateHistoryUp() : navigateHistoryDown();
+      if (didNavigate) {
+        event.preventDefault();
+      }
+      return;
+    }
+
+    if (event.key !== "Enter" || hasModifier) {
       return;
     }
 
