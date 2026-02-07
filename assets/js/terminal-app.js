@@ -88,6 +88,9 @@
     cwd: "/",
   };
 
+  let latestRenderToken = 0;
+  let isAnimating = false;
+
   appEl.innerHTML = [
     '<main id="screen" class="screen" aria-label="Interactive terminal">',
     '  <section id="output" class="output" aria-live="polite"></section>',
@@ -782,6 +785,125 @@
     }
   }
 
+  function submitTerminalForm() {
+    if (typeof formEl.requestSubmit === "function") {
+      formEl.requestSubmit();
+      return;
+    }
+
+    formEl.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  }
+
+  function delay(ms) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
+  function typingDelayMs(char = "") {
+    const roll = Math.random();
+
+    // Most keystrokes stay near the existing speed.
+    if (roll < 0.78) {
+      return 44 + Math.floor(Math.random() * 56);
+    }
+
+    // Short burst: occasional quick taps.
+    if (roll < 0.91) {
+      return 28 + Math.floor(Math.random() * 26);
+    }
+
+    // Hesitation: occasional longer pauses.
+    const extraPause = char === " " ? 26 : 0;
+    return 95 + extraPause + Math.floor(Math.random() * 105);
+  }
+
+  function initialTypingDelayMs() {
+    return 340 + Math.floor(Math.random() * 340);
+  }
+
+  function beforeEnterDelayMs() {
+    const base = 120 + Math.floor(Math.random() * 160);
+    const hesitation = Math.random() < 0.3 ? 80 + Math.floor(Math.random() * 130) : 0;
+    return base + hesitation;
+  }
+
+  async function simulateTypeOnly(command, renderToken) {
+    inputEl.value = "";
+    resizeInput();
+    inputEl.focus();
+    await delay(initialTypingDelayMs());
+
+    for (const char of command) {
+      if (renderToken !== latestRenderToken) {
+        return;
+      }
+
+      inputEl.value += char;
+      resizeInput();
+      await delay(typingDelayMs(char));
+    }
+  }
+
+  async function simulateTypeAndEnter(command, renderToken) {
+    isAnimating = true;
+    try {
+      await simulateTypeOnly(command, renderToken);
+      if (renderToken !== latestRenderToken) {
+        return;
+      }
+
+      await delay(beforeEnterDelayMs());
+      isAnimating = false;
+      submitTerminalForm();
+    } finally {
+      isAnimating = false;
+    }
+  }
+
+  function routeCommandForState(routeState) {
+    if (routeState.projectSlug) {
+      return `cat ${routeState.projectSlug}`;
+    }
+
+    if (routeState.rootFile) {
+      return `cat ${routeState.rootFile}`;
+    }
+
+    return "ls";
+  }
+
+  function appendNotFoundOutput(pathname) {
+    appendCommand(`file ${pathname}`);
+    appendLine(`file: cannot open '${pathname}' (No such file or directory)`, "error");
+    appendLine("404 not found", "error");
+  }
+
+  function setNotFoundRecoveryCommand() {
+    inputEl.value = "clear && cd / && ls";
+    resizeInput();
+  }
+
+  async function simulateNotFoundSequence(pathname, renderToken) {
+    isAnimating = true;
+    try {
+      await simulateTypeOnly(`file ${pathname}`, renderToken);
+      if (renderToken !== latestRenderToken) {
+        return;
+      }
+
+      await delay(beforeEnterDelayMs());
+      if (renderToken !== latestRenderToken) {
+        return;
+      }
+
+      appendNotFoundOutput(pathname);
+      await simulateTypeOnly("clear && cd / && ls", renderToken);
+    } finally {
+      isAnimating = false;
+    }
+  }
+
   function simulateProjectClick(slug) {
     const project = projects[slug];
     if (!project) {
@@ -882,14 +1004,13 @@
   }
 
   function renderNotFound(pathname) {
-    appendCommand(`file ${pathname}`);
-    appendLine(`file: cannot open '${pathname}' (No such file or directory)`, "error");
-    appendLine("404 not found", "error");
-    inputEl.value = "clear && cd / && ls";
-    resizeInput();
+    appendNotFoundOutput(pathname);
+    setNotFoundRecoveryCommand();
   }
 
   function renderRoute(pathname, withBoot = false) {
+    latestRenderToken += 1;
+    const renderToken = latestRenderToken;
     const normalized = inferRoutePath(pathname);
     const routeState = routePathToState(pathname);
 
@@ -900,24 +1021,24 @@
 
     if (!routeState) {
       setCwd("/", false);
-      renderNotFound(normalized);
-      inputEl.focus();
+      if (withBoot) {
+        simulateNotFoundSequence(normalized, renderToken);
+      } else {
+        renderNotFound(normalized);
+        inputEl.focus();
+      }
       return;
     }
 
     setCwd(routeState.cwd, false);
-    if (routeState.projectSlug) {
-      appendCommand(`cat ${routeState.projectSlug}`);
-      doCat(routeState.projectSlug);
-    } else if (routeState.rootFile) {
-      appendCommand(`cat ${routeState.rootFile}`);
-      doCat(routeState.rootFile);
+    const routeCommand = routeCommandForState(routeState);
+    if (withBoot) {
+      simulateTypeAndEnter(routeCommand, renderToken);
     } else {
-      appendCommand("ls");
-      doLs();
+      appendCommand(routeCommand);
+      runSingle(routeCommand);
+      inputEl.focus();
     }
-
-    inputEl.focus();
   }
 
   outputEl.addEventListener("click", (event) => {
@@ -947,6 +1068,9 @@
 
   formEl.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (isAnimating) {
+      return;
+    }
     const command = inputEl.value.trim();
     appendCommand(command);
     runCommandLine(command);
@@ -956,7 +1080,11 @@
     inputEl.focus();
   });
 
-  inputEl.addEventListener("input", () => {
+  inputEl.addEventListener("input", (event) => {
+    if (isAnimating) {
+      event.target.value = "";
+      return;
+    }
     resizeInput();
   });
 
@@ -973,12 +1101,7 @@
     }
 
     event.preventDefault();
-    if (typeof formEl.requestSubmit === "function") {
-      formEl.requestSubmit();
-      return;
-    }
-
-    formEl.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    submitTerminalForm();
   });
 
   screenEl.addEventListener("click", (event) => {
