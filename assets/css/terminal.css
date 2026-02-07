@@ -31,6 +31,8 @@ body {
   overflow-y: scroll;
   overflow-x: hidden;
   scrollbar-gutter: stable;
+  --prompt-width: 0px;
+  --prompt-gap: 10px;
 }
 
 .screen::before {
@@ -122,8 +124,6 @@ body {
 
 .input-wrap {
   position: relative;
-  --prompt-width: 0px;
-  --prompt-gap: 10px;
   z-index: 2;
   padding: 0 24px 24px;
   background: transparent;
@@ -208,13 +208,13 @@ body {
   }
 }
 
-.command-row .input-prompt,
-.command-row .cmd {
-  position: static;
-  display: inline;
+.command-row {
+  position: relative;
 }
 
 .command-row .cmd {
+  display: block;
+  text-indent: calc(var(--prompt-width) + var(--prompt-gap));
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-all;

@@ -265,8 +265,8 @@
   }
 
   function syncPromptWidth() {
-    const promptWidth = Math.ceil(promptEl.getBoundingClientRect().width);
-    formEl.style.setProperty("--prompt-width", `${promptWidth}px`);
+    const promptWidth = promptEl.getBoundingClientRect().width;
+    screenEl.style.setProperty("--prompt-width", `${promptWidth}px`);
   }
 
   function promptText() {
@@ -390,7 +390,7 @@
     row.className = "line command-row";
     row.innerHTML =
       `<span class="input-prompt">${escapeHtml(promptText())}</span>` +
-      `<span class="cmd"> ${escapeHtml(command)}</span>`;
+      `<span class="cmd">${escapeHtml(command)}</span>`;
     outputEl.appendChild(row);
     scrollToBottom();
   }
