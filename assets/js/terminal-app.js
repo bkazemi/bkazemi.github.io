@@ -95,6 +95,7 @@
   const commandHistory = [];
   let historyCursor = -1;
   let historyDraft = "";
+  let lastTabInput = null;
 
   appEl.innerHTML = [
     '<main id="screen" class="screen" aria-label="Interactive terminal">',
@@ -851,6 +852,182 @@
     inputEl.setSelectionRange(value.length, value.length);
   }
 
+  const COMPLETABLE_COMMANDS = [
+    "cat", "cd", "clear", "help", "history", "home", "ls", "open", "pwd", "xdg-open",
+  ];
+
+  function longestCommonPrefix(strings) {
+    if (!strings.length) {
+      return "";
+    }
+
+    let prefix = strings[0];
+    for (let i = 1; i < strings.length; i++) {
+      while (!strings[i].startsWith(prefix)) {
+        prefix = prefix.slice(0, -1);
+      }
+    }
+
+    return prefix;
+  }
+
+  function resolveCompletionDir(partialArg) {
+    if (!partialArg) {
+      return { dir: state.cwd, namePrefix: "", pathPrefix: "" };
+    }
+
+    const lastSlash = partialArg.lastIndexOf("/");
+    if (lastSlash === -1) {
+      return { dir: state.cwd, namePrefix: partialArg, pathPrefix: "" };
+    }
+
+    const dirPart = partialArg.slice(0, lastSlash + 1);
+    const namePrefix = partialArg.slice(lastSlash + 1);
+    const cleaned = dirPart.replace(/\/+$/, "") || "/";
+
+    let resolvedDir;
+    if (cleaned === "/" || cleaned === "~") {
+      resolvedDir = "/";
+    } else if (cleaned === "/projects") {
+      resolvedDir = "/projects";
+    } else if (cleaned === "projects" || cleaned === "./projects") {
+      resolvedDir = state.cwd === "/" ? "/projects" : null;
+    } else if (cleaned === "." || cleaned === "./" || cleaned === "") {
+      resolvedDir = state.cwd;
+    } else {
+      return null;
+    }
+
+    if (!resolvedDir) {
+      return null;
+    }
+
+    const normalizedPrefix = cleaned === "~" ? "/" : dirPart;
+    return { dir: resolvedDir, namePrefix, pathPrefix: normalizedPrefix };
+  }
+
+  function entryCompletionName(entry) {
+    if (entry.type === "dir") {
+      return entry.label.replace(/\/$/, "");
+    }
+
+    return entry.slug || entry.label;
+  }
+
+  function getPathCompletions(command, partialArg) {
+    const ctx = resolveCompletionDir(partialArg);
+    if (!ctx) {
+      return [];
+    }
+
+    const entries = entriesForCwd(ctx.dir);
+
+    let filtered;
+    if (command === "cd") {
+      filtered = entries.filter((e) => e.type === "dir");
+    } else if (command === "cat") {
+      filtered = entries.filter((e) => e.type === "file" || e.type === "project");
+    } else {
+      filtered = entries;
+    }
+
+    return filtered
+      .filter((e) => entryCompletionName(e).startsWith(ctx.namePrefix))
+      .map((e) => {
+        const name = entryCompletionName(e);
+        const suffix = e.type === "dir" ? "/" : "";
+        return {
+          completion: ctx.pathPrefix + name + suffix,
+          display: name + suffix,
+        };
+      });
+  }
+
+  function getTabCompletions(input) {
+    const lastAmpIdx = input.lastIndexOf("&&");
+    let chainPrefix = "";
+    let subCmd = input;
+    if (lastAmpIdx !== -1) {
+      chainPrefix = input.slice(0, lastAmpIdx + 2);
+      subCmd = input.slice(lastAmpIdx + 2);
+    }
+
+    const leadingWs = subCmd.match(/^\s*/)[0];
+    const trimmed = subCmd.trimStart();
+    const spaceIdx = trimmed.indexOf(" ");
+
+    if (spaceIdx === -1) {
+      const partial = trimmed;
+      const matches = COMPLETABLE_COMMANDS.filter((c) => c.startsWith(partial));
+      return {
+        type: "command",
+        candidates: matches.map((m) => chainPrefix + leadingWs + m),
+        displayCandidates: matches,
+      };
+    }
+
+    const cmdName = trimmed.slice(0, spaceIdx);
+    const afterCmd = trimmed.slice(spaceIdx);
+    const arg = afterCmd.trimStart();
+    const argWs = afterCmd.slice(0, afterCmd.length - arg.length);
+
+    let entries;
+    if (cmdName === "xdg-open" || cmdName === "open") {
+      const projectNames = Object.keys(projects);
+      entries = projectNames
+        .filter((p) => p.startsWith(arg))
+        .map((p) => ({ completion: p, display: p }));
+    } else if (cmdName === "cd" || cmdName === "ls" || cmdName === "cat") {
+      entries = getPathCompletions(cmdName, arg);
+    } else {
+      entries = [];
+    }
+
+    return {
+      type: "argument",
+      candidates: entries.map((e) => chainPrefix + leadingWs + cmdName + argWs + e.completion),
+      displayCandidates: entries.map((e) => e.display),
+    };
+  }
+
+  function handleTabCompletion() {
+    const currentInput = inputEl.value;
+    const isDoubleTab = lastTabInput === currentInput;
+
+    const result = getTabCompletions(currentInput);
+
+    if (!result.candidates.length) {
+      lastTabInput = currentInput;
+      return;
+    }
+
+    if (result.candidates.length === 1) {
+      let completed = result.candidates[0];
+      if (result.type === "command" || !completed.endsWith("/")) {
+        completed += " ";
+      }
+      setInputValue(completed);
+      lastTabInput = null;
+      return;
+    }
+
+    const commonPrefix = longestCommonPrefix(result.candidates);
+
+    if (commonPrefix !== currentInput) {
+      setInputValue(commonPrefix);
+      lastTabInput = commonPrefix;
+      return;
+    }
+
+    if (isDoubleTab) {
+      appendCommand(currentInput);
+      appendLine(result.displayCandidates.join("  "));
+      lastTabInput = null;
+    } else {
+      lastTabInput = currentInput;
+    }
+  }
+
   function historyEntryForCursor(cursor) {
     if (cursor < 0 || cursor >= commandHistory.length) {
       return "";
@@ -1195,6 +1372,7 @@
       recordHistory(command);
     }
     resetHistoryNavigation();
+    lastTabInput = null;
     appendCommand(command);
     runCommandLine(command);
     inputEl.value = "";
@@ -1209,6 +1387,7 @@
       return;
     }
     resetHistoryNavigation();
+    lastTabInput = null;
     resizeInput();
   });
 
@@ -1225,6 +1404,14 @@
       const didNavigate = isArrowUp ? navigateHistoryUp() : navigateHistoryDown();
       if (didNavigate) {
         event.preventDefault();
+      }
+      return;
+    }
+
+    if (event.key === "Tab" && !hasModifier) {
+      event.preventDefault();
+      if (!isAnimating) {
+        handleTabCompletion();
       }
       return;
     }
