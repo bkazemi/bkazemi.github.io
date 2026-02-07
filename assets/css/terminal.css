@@ -209,13 +209,105 @@ body {
 }
 
 .command-row {
-  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--prompt-gap);
+}
+
+.command-row .input-prompt {
+  position: static;
+  inset: auto;
+  flex: none;
 }
 
 .command-row .cmd {
   display: block;
-  text-indent: calc(var(--prompt-width) + var(--prompt-gap));
+  flex: 1;
+  min-width: 0;
+  text-indent: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-all;
+}
+
+/* GUI mode (startx) */
+
+.gui-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--bg-0);
+  display: flex;
+  flex-direction: column;
+}
+
+.gui-layer.hidden {
+  display: none;
+}
+
+.gui-window {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.gui-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  min-height: 32px;
+  background: #1a2a1a;
+  border-bottom: 2px solid var(--accent-soft);
+  padding: 0 8px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.85rem;
+}
+
+.gui-titlebar-text {
+  color: var(--muted);
+}
+
+.gui-close-btn {
+  background: none;
+  border: 1px solid var(--muted);
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  padding: 1px 6px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.gui-close-btn:hover {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.gui-close-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.gui-content {
+  flex: 1;
+  border: none;
+  width: 100%;
+  background: #000;
+}
+
+.gui-teardown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: var(--bg-0);
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  padding: 24px;
 }

@@ -77,6 +77,17 @@
     },
   };
 
+  const guiApps = {
+    shakar: {
+      title: "shakar playground",
+      src: "/shakar",
+    },
+    gopoker: {
+      title: "gopoker",
+      src: "https://poker.shirkadeh.org",
+    },
+  };
+
   const aboutText =
     "Hi, I'm a programmer. This site hosts my personal projects.";
 
@@ -107,6 +118,15 @@
     "    </div>",
     "  </form>",
     "</main>",
+    '<div id="gui-layer" class="gui-layer hidden">',
+    '  <div class="gui-window">',
+    '    <div class="gui-titlebar">',
+    '      <span class="gui-titlebar-text" id="gui-titlebar-text"></span>',
+    '      <button class="gui-close-btn" id="gui-close-btn">[X]</button>',
+    "    </div>",
+    '    <iframe class="gui-content" id="gui-content"></iframe>',
+    "  </div>",
+    "</div>",
   ].join("");
 
   const screenEl = document.getElementById("screen");
@@ -114,6 +134,10 @@
   const formEl = document.getElementById("terminal-form");
   const inputEl = document.getElementById("terminal-input");
   const promptEl = document.getElementById("active-prompt");
+  const guiLayerEl = document.getElementById("gui-layer");
+  const guiTitleTextEl = document.getElementById("gui-titlebar-text");
+  const guiCloseBtn = document.getElementById("gui-close-btn");
+  const guiContentEl = document.getElementById("gui-content");
 
   function normalizePathname(pathname) {
     if (!pathname || pathname === "/") {
@@ -231,7 +255,7 @@
     return normalized;
   }
 
-  function routePathToState(pathname) {
+  function routePathToState(pathname, { includeGuiRoutes = true } = {}) {
     const routePath = inferRoutePath(pathname);
     if (routePath === "/") {
       return { routePath, cwd: "/" };
@@ -254,6 +278,13 @@
           cwd: "/projects",
           projectSlug: slug,
         };
+      }
+    }
+
+    if (includeGuiRoutes) {
+      const guiMatch = routePath.match(/^\/x\/([^/]+)$/);
+      if (guiMatch && guiApps[guiMatch[1]]) {
+        return { routePath, cwd: "/", guiApp: guiMatch[1] };
       }
     }
 
@@ -326,6 +357,49 @@
     }
 
     syncPathForRoute(project.routePath, replace);
+  }
+
+  function enterGuiMode(appKey, pushState = true) {
+    const app = guiApps[appKey];
+    if (!app) {
+      return;
+    }
+
+    guiTitleTextEl.textContent = app.title;
+    guiContentEl.src = app.src;
+    screenEl.style.display = "none";
+    guiLayerEl.classList.remove("hidden");
+
+    if (pushState) {
+      syncPathForRoute(`/x/${appKey}`, false);
+    }
+  }
+
+  async function exitGuiMode() {
+    guiContentEl.src = "about:blank";
+
+    const teardown = document.createElement("div");
+    teardown.className = "gui-teardown";
+    const line1 = document.createElement("p");
+    line1.className = "line";
+    line1.textContent = "xinit: connection to X server lost";
+    const line2 = document.createElement("p");
+    line2.className = "line";
+    line2.textContent = "waiting for X server to shut down... done";
+    teardown.appendChild(line1);
+    teardown.appendChild(line2);
+    guiLayerEl.appendChild(teardown);
+
+    await delay(600);
+
+    teardown.remove();
+    guiLayerEl.classList.add("hidden");
+    screenEl.style.display = "";
+
+    appendLine("xinit: server terminated", "muted");
+    syncPathForCwd(false);
+    inputEl.focus();
+    scrollToBottom();
   }
 
   function setCwd(nextCwd, syncPath = false) {
@@ -570,7 +644,7 @@
     }
 
     if (strippedDotPath.startsWith("/")) {
-      const routeState = routePathToState(strippedDotPath);
+      const routeState = routePathToState(strippedDotPath, { includeGuiRoutes: false });
       if (routeState && !routeState.projectSlug && !routeState.rootFile) {
         setCwd(routeState.cwd, true);
         return { ok: true };
@@ -705,6 +779,10 @@
       return { ok: false };
     }
 
+    if (guiApps[arg]) {
+      return doStartx(arg);
+    }
+
     const project = projects[arg];
     if (!project) {
       appendLine(`${commandName}: ${arg}: not found`, "error");
@@ -745,6 +823,29 @@
     return { ok: true };
   }
 
+  function doStartx(arg) {
+    if (!arg) {
+      appendLine("startx: no .xinitrc found; specify an app (e.g. startx shakar)", "error");
+      appendLine("available apps: " + Object.keys(guiApps).join(", "), "muted");
+      return { ok: false };
+    }
+
+    if (!guiApps[arg]) {
+      appendLine(`startx: unknown app '${arg}'`, "error");
+      appendLine("available apps: " + Object.keys(guiApps).join(", "), "muted");
+      return { ok: false };
+    }
+
+    appendLine("xinit: starting X server", "muted");
+    isAnimating = true;
+    window.setTimeout(() => {
+      isAnimating = false;
+      enterGuiMode(arg);
+    }, 500);
+
+    return { ok: true, stopChain: true };
+  }
+
   function doHelp() {
     appendLine("Available commands:", "muted");
     appendLine("help | ?");
@@ -753,6 +854,7 @@
     appendLine("cd .. | cd ~ | cd / | cd projects | cd /projects");
     appendLine("cat <path>");
     appendLine("xdg-open <project>");
+    appendLine("startx <app>");
     appendLine("history [n]");
     appendLine("home");
     appendLine("clear");
@@ -789,6 +891,10 @@
       return doCat(arg);
     }
 
+    if (name === "startx") {
+      return doStartx(arg);
+    }
+
     if (name === "xdg-open" || name === "open") {
       return doXdgOpen(arg, name);
     }
@@ -820,6 +926,9 @@
 
     for (const part of parts) {
       const result = runSingle(part);
+      if (result.stopChain) {
+        return;
+      }
       if (!result.ok) {
         return;
       }
@@ -853,7 +962,7 @@
   }
 
   const COMPLETABLE_COMMANDS = [
-    "cat", "cd", "clear", "help", "history", "home", "ls", "open", "pwd", "xdg-open",
+    "cat", "cd", "clear", "help", "history", "home", "ls", "open", "pwd", "startx", "xdg-open",
   ];
 
   function longestCommonPrefix(strings) {
@@ -977,6 +1086,11 @@
       entries = projectNames
         .filter((p) => p.startsWith(arg))
         .map((p) => ({ completion: p, display: p }));
+    } else if (cmdName === "startx") {
+      const appNames = Object.keys(guiApps);
+      entries = appNames
+        .filter((a) => a.startsWith(arg))
+        .map((a) => ({ completion: a, display: a }));
     } else if (cmdName === "cd" || cmdName === "ls" || cmdName === "cat") {
       entries = getPathCompletions(cmdName, arg);
     } else {
@@ -1310,6 +1424,18 @@
     const normalized = inferRoutePath(pathname);
     const routeState = routePathToState(pathname);
 
+    if (routeState && routeState.guiApp) {
+      enterGuiMode(routeState.guiApp, false);
+      return;
+    }
+
+    // Restore terminal mode if returning from GUI (e.g. browser back)
+    if (!guiLayerEl.classList.contains("hidden")) {
+      guiContentEl.src = "about:blank";
+      guiLayerEl.classList.add("hidden");
+      screenEl.style.display = "";
+    }
+
     doClear();
     if (withBoot) {
       bootSession();
@@ -1360,6 +1486,10 @@
 
     setPrompt();
     inputEl.focus();
+  });
+
+  guiCloseBtn.addEventListener("click", () => {
+    exitGuiMode();
   });
 
   formEl.addEventListener("submit", (event) => {
