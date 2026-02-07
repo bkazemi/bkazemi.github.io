@@ -94,6 +94,7 @@
   const LAST_LOGIN_KEY = "bkazemi_terminal_last_login_ms";
   const host = window.location.hostname || "localhost";
   const hostSegment = host.split(".")[0] || "localhost";
+  const titleDomain = host.toLowerCase();
 
   const state = {
     cwd: "/",
@@ -255,6 +256,44 @@
     return normalized;
   }
 
+  function hasOwnEntry(map, key) {
+    return Object.prototype.hasOwnProperty.call(map, key);
+  }
+
+  function titleForRoutePath(routePath) {
+    let label = "404";
+
+    if (routePath === "/") {
+      label = "home";
+    } else if (routePath === "/projects") {
+      label = "projects";
+    } else if (routePath === "/about") {
+      label = "about";
+    } else {
+      const projectMatch = routePath.match(/^\/projects\/([^/]+)$/);
+      if (projectMatch) {
+        const slug = projectMatch[1];
+        if (hasOwnEntry(projects, slug)) {
+          label = projects[slug].name;
+        }
+      }
+
+      const guiMatch = routePath.match(/^\/x\/([^/]+)$/);
+      if (guiMatch) {
+        const appKey = guiMatch[1];
+        if (hasOwnEntry(guiApps, appKey)) {
+          label = guiApps[appKey].title;
+        }
+      }
+    }
+
+    return `${label.toLowerCase()} - ${titleDomain}`;
+  }
+
+  function syncDocumentTitle(routePath) {
+    document.title = titleForRoutePath(routePath);
+  }
+
   function routePathToState(pathname, { includeGuiRoutes = true } = {}) {
     const routePath = inferRoutePath(pathname);
     if (routePath === "/") {
@@ -272,7 +311,7 @@
     const projectMatch = routePath.match(/^\/projects\/([^/]+)$/);
     if (projectMatch) {
       const slug = projectMatch[1];
-      if (projects[slug]) {
+      if (hasOwnEntry(projects, slug)) {
         return {
           routePath,
           cwd: "/projects",
@@ -283,7 +322,7 @@
 
     if (includeGuiRoutes) {
       const guiMatch = routePath.match(/^\/x\/([^/]+)$/);
-      if (guiMatch && guiApps[guiMatch[1]]) {
+      if (guiMatch && hasOwnEntry(guiApps, guiMatch[1])) {
         return { routePath, cwd: "/", guiApp: guiMatch[1] };
       }
     }
@@ -332,7 +371,10 @@
   }
 
   function syncPathForRoute(routePath, replace = false) {
-    const targetPath = normalizePathname(toAppPath(routePath));
+    const normalizedRoutePath = inferRoutePath(routePath);
+    syncDocumentTitle(normalizedRoutePath);
+
+    const targetPath = normalizePathname(toAppPath(normalizedRoutePath));
     const currentPath = normalizePathname(window.location.pathname);
     if (targetPath === currentPath) {
       return;
@@ -351,7 +393,7 @@
   }
 
   function syncPathForProject(slug, replace = false) {
-    const project = projects[slug];
+    const project = hasOwnEntry(projects, slug) ? projects[slug] : null;
     if (!project) {
       return;
     }
@@ -360,7 +402,7 @@
   }
 
   function enterGuiMode(appKey, pushState = true) {
-    const app = guiApps[appKey];
+    const app = hasOwnEntry(guiApps, appKey) ? guiApps[appKey] : null;
     if (!app) {
       return;
     }
@@ -584,7 +626,7 @@
     }
 
     const projectMatch = normalizedPath.match(/^\/projects\/([^/]+)$/);
-    if (projectMatch && projects[projectMatch[1]]) {
+    if (projectMatch && hasOwnEntry(projects, projectMatch[1])) {
       return { ok: true, type: "file", label: projectMatch[1] };
     }
 
@@ -679,7 +721,7 @@
     }
 
     const projectMatch = routePath.match(/^\/projects\/([^/]+)$/);
-    if (projectMatch && projects[projectMatch[1]]) {
+    if (projectMatch && hasOwnEntry(projects, projectMatch[1])) {
       return { ok: true, type: "project", slug: projectMatch[1] };
     }
 
@@ -779,11 +821,11 @@
       return { ok: false };
     }
 
-    if (guiApps[arg]) {
+    if (hasOwnEntry(guiApps, arg)) {
       return doStartx(arg);
     }
 
-    const project = projects[arg];
+    const project = hasOwnEntry(projects, arg) ? projects[arg] : null;
     if (!project) {
       appendLine(`${commandName}: ${arg}: not found`, "error");
       return { ok: false };
@@ -830,7 +872,7 @@
       return { ok: false };
     }
 
-    if (!guiApps[arg]) {
+    if (!hasOwnEntry(guiApps, arg)) {
       appendLine(`startx: unknown app '${arg}'`, "error");
       appendLine("available apps: " + Object.keys(guiApps).join(", "), "muted");
       return { ok: false };
@@ -1315,7 +1357,7 @@
   }
 
   function simulateProjectClick(slug) {
-    const project = projects[slug];
+    const project = hasOwnEntry(projects, slug) ? projects[slug] : null;
     if (!project) {
       return;
     }
@@ -1422,6 +1464,7 @@
     latestRenderToken++;
     const renderToken = latestRenderToken;
     const normalized = inferRoutePath(pathname);
+    syncDocumentTitle(normalized);
     const routeState = routePathToState(pathname);
 
     if (routeState && routeState.guiApp) {
