@@ -67,6 +67,17 @@ body {
   line-height: 1.6;
 }
 
+.ascii-art {
+  max-width: 100%;
+  white-space: pre;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.05;
+  font-variant-ligatures: none;
+}
+
 .desc-para {
   white-space: normal;
   max-width: 72ch;
