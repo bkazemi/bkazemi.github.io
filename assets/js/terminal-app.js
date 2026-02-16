@@ -202,6 +202,9 @@
   };
 
   const MAX_HISTORY_ENTRIES = 200;
+  const STARTUP_READY_TIMEOUT_MS = 5000;
+  const FONT_READY_TIMEOUT_MS = 5000;
+  const STARTUP_POLL_INTERVAL_MS = 25;
   let latestRenderToken = 0;
   let isAnimating = false;
   let isSyntheticSubmit = false;
@@ -209,6 +212,8 @@
   let historyCursor = -1;
   let historyDraft = "";
   let lastTabInput = null;
+  let bootAnimationReadyPromise = null;
+  let hasBootAnimationReadiness = false;
 
   appEl.innerHTML = [
     '<main id="screen" class="screen" aria-label="Interactive terminal">',
@@ -470,6 +475,103 @@
     const nextHeight = Math.max(inputEl.scrollHeight, lineHeight);
     inputEl.style.height = `${nextHeight}px`;
     ensureInputVisible();
+  }
+
+  function nextAnimationFrame() {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  }
+
+  async function waitForCondition(test, timeoutMs = STARTUP_READY_TIMEOUT_MS) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() <= deadline) {
+      if (test()) {
+        return true;
+      }
+      await delay(STARTUP_POLL_INTERVAL_MS);
+    }
+    return false;
+  }
+
+  async function waitForLayoutFrames(frameCount = 2) {
+    for (let frame = 0; frame < frameCount; frame += 1) {
+      await nextAnimationFrame();
+    }
+  }
+
+  async function waitForFontMetrics() {
+    const fontSet = document.fonts;
+    if (!fontSet) {
+      return true;
+    }
+
+    const waits = [];
+    if (typeof fontSet.load === "function") {
+      const descriptors = [inputEl, promptEl]
+        .map((el) => {
+          const style = window.getComputedStyle(el);
+          const weight = style.fontWeight || "400";
+          const size = style.fontSize || "1rem";
+          const family = style.fontFamily || "monospace";
+          return `${weight} ${size} ${family}`;
+        })
+        .filter(Boolean);
+
+      const uniqueDescriptors = Array.from(new Set(descriptors));
+      uniqueDescriptors.forEach((descriptor) => {
+        waits.push(fontSet.load(descriptor));
+      });
+    }
+    waits.push(fontSet.ready);
+
+    let finished = false;
+    await Promise.race([
+      Promise.all(waits.map((wait) => wait.catch(() => null))).then(() => {
+        finished = true;
+      }),
+      delay(FONT_READY_TIMEOUT_MS),
+    ]);
+    return finished;
+  }
+
+  function waitForBootAnimationReady() {
+    if (hasBootAnimationReadiness) {
+      return Promise.resolve(true);
+    }
+
+    if (bootAnimationReadyPromise) {
+      return bootAnimationReadyPromise;
+    }
+
+    const pendingReadiness = (async () => {
+      const readinessChecks = Promise.all([
+        waitForCondition(() => appEl.classList.contains("ready")),
+        waitForCondition(
+          () => window.getComputedStyle(screenEl).getPropertyValue("--prompt-gap").trim().length > 0,
+        ),
+        waitForFontMetrics(),
+      ]).then(([appReady, stylesReady, fontsReady]) => appReady && stylesReady && fontsReady);
+
+      const ready = await readinessChecks;
+      await waitForLayoutFrames(2);
+      setPrompt();
+      resizeInput();
+      return ready;
+    })();
+
+    bootAnimationReadyPromise = pendingReadiness.then((ready) => {
+      if (ready) {
+        hasBootAnimationReadiness = true;
+      }
+      bootAnimationReadyPromise = null;
+      return ready;
+    }).catch(() => {
+      bootAnimationReadyPromise = null;
+      return false;
+    });
+
+    return bootAnimationReadyPromise;
   }
 
   function syncPathForRoute(routePath, replace = false) {
@@ -1514,6 +1616,45 @@
     }
   }
 
+  async function runBootCommand(routeCommand, renderToken) {
+    if (renderToken !== latestRenderToken) {
+      return;
+    }
+
+    const canAnimate = await waitForBootAnimationReady();
+    if (renderToken !== latestRenderToken) {
+      return;
+    }
+
+    if (!canAnimate) {
+      appendCommand(routeCommand);
+      runSingle(routeCommand);
+      inputEl.focus();
+      return;
+    }
+
+    await simulateTypeAndEnter(routeCommand, renderToken);
+  }
+
+  async function runBootNotFound(pathname, renderToken) {
+    if (renderToken !== latestRenderToken) {
+      return;
+    }
+
+    const canAnimate = await waitForBootAnimationReady();
+    if (renderToken !== latestRenderToken) {
+      return;
+    }
+
+    if (!canAnimate) {
+      renderNotFound(pathname);
+      inputEl.focus();
+      return;
+    }
+
+    await simulateNotFoundSequence(pathname, renderToken);
+  }
+
   function simulateProjectClick(slug) {
     const project = hasOwnEntry(projects, slug) ? projects[slug] : null;
     if (!project) {
@@ -1645,7 +1786,7 @@
     if (!routeState) {
       setCwd("/", false);
       if (withBoot) {
-        simulateNotFoundSequence(normalized, renderToken);
+        runBootNotFound(normalized, renderToken);
       } else {
         renderNotFound(normalized);
         inputEl.focus();
@@ -1656,7 +1797,7 @@
     setCwd(routeState.cwd, false);
     const routeCommand = routeCommandForState(routeState);
     if (withBoot) {
-      simulateTypeAndEnter(routeCommand, renderToken);
+      runBootCommand(routeCommand, renderToken);
     } else {
       appendCommand(routeCommand);
       runSingle(routeCommand);
