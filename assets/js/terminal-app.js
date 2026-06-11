@@ -508,7 +508,17 @@
 
     const waits = [];
     if (typeof fontSet.load === "function") {
-      const descriptors = [inputEl, promptEl]
+      const asciiProbe = document.createElement("span");
+      asciiProbe.className = "line ascii-art";
+      asciiProbe.setAttribute("aria-hidden", "true");
+      asciiProbe.style.position = "absolute";
+      asciiProbe.style.visibility = "hidden";
+      asciiProbe.style.pointerEvents = "none";
+      asciiProbe.style.whiteSpace = "pre";
+      asciiProbe.textContent = "██████████";
+      outputEl.appendChild(asciiProbe);
+
+      const descriptors = [inputEl, promptEl, asciiProbe]
         .map((el) => {
           const style = window.getComputedStyle(el);
           const weight = style.fontWeight || "400";
@@ -517,6 +527,7 @@
           return `${weight} ${size} ${family}`;
         })
         .filter(Boolean);
+      asciiProbe.remove();
 
       const uniqueDescriptors = Array.from(new Set(descriptors));
       uniqueDescriptors.forEach((descriptor) => {
@@ -705,13 +716,13 @@
     }
 
     const probe = document.createElement("span");
-    probe.className = "line";
+    probe.className = "line ascii-art";
     probe.setAttribute("aria-hidden", "true");
     probe.style.position = "absolute";
     probe.style.visibility = "hidden";
     probe.style.pointerEvents = "none";
     probe.style.whiteSpace = "pre";
-    probe.textContent = "MMMMMMMMMM";
+    probe.textContent = "██████████";
     outputEl.appendChild(probe);
     outputWidthProbeEl = probe;
     return probe;
