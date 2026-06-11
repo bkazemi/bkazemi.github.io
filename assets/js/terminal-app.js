@@ -2551,6 +2551,15 @@
     inputEl.focus();
   });
 
+  // Block all user-originated input (typing, paste, IME, autofill) while the
+  // boot/route command is auto-typing. Programmatic value writes from the
+  // animation do not fire `beforeinput`, so they pass through untouched.
+  inputEl.addEventListener("beforeinput", (event) => {
+    if (isAnimating) {
+      event.preventDefault();
+    }
+  });
+
   inputEl.addEventListener("input", (event) => {
     if (isAnimating) {
       event.target.value = "";
