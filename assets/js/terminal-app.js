@@ -1916,9 +1916,14 @@
     try {
       const line = inputEl.value.replace(/\r/g, "");
       inputEl.value = "";
+      // Repaint the highlight overlay synchronously so the just-submitted line
+      // doesn't linger on the input row (echoed to output the same frame) while
+      // the async worker highlight is in flight.
+      setShakarLiveHighlightFallback();
       resizeInput();
       await handleShakarSubmit(line);
       inputEl.value = shakar.continuation ? shakar.nextIndent : "";
+      setShakarLiveHighlightFallback();
       resizeInput();
       requestShakarLiveHighlight();
       inputEl.focus();
