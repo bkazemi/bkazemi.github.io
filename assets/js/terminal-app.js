@@ -233,6 +233,8 @@
     lexProbeId: 0,
     lexProbeTargets: new Map(),
     submitting: false,
+    spinnerTimer: null,
+    spinnerEl: null,
   };
 
   appEl.innerHTML = [
@@ -1456,6 +1458,30 @@
     }
   }
 
+  function startShakarSpinner() {
+    stopShakarSpinner();
+    const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let frame = 0;
+    shakar.spinnerEl = appendLine(`${frames[0]} loading shakar`, "muted");
+    shakar.spinnerTimer = window.setInterval(() => {
+      frame = (frame + 1) % frames.length;
+      if (shakar.spinnerEl) {
+        shakar.spinnerEl.textContent = `${frames[frame]} loading shakar`;
+      }
+    }, 80);
+  }
+
+  function stopShakarSpinner() {
+    if (shakar.spinnerTimer) {
+      window.clearInterval(shakar.spinnerTimer);
+      shakar.spinnerTimer = null;
+    }
+    if (shakar.spinnerEl) {
+      shakar.spinnerEl.remove();
+      shakar.spinnerEl = null;
+    }
+  }
+
   function resetShakarBlock() {
     shakar.continuation = false;
     shakar.lines = [];
@@ -1479,6 +1505,7 @@
       if (msg.type === "ready") {
         shakar.ready = true;
         shakar.pending = false;
+        stopShakarSpinner();
         appendLine("shakar repl - Ctrl-D or exit to return", "muted");
         setShakarInputEnabled(true);
         setPrompt();
@@ -1554,6 +1581,7 @@
 
     shakar.pending = true;
     setShakarInputEnabled(false);
+    startShakarSpinner();
     shakar.worker.postMessage({
       type: "init",
       keyBuffer: null,
@@ -1563,6 +1591,7 @@
   }
 
   function exitShakar() {
+    stopShakarSpinner();
     resetShakarBlock();
     shakar.active = false;
     shakar.pending = false;
