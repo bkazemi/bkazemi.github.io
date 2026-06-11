@@ -1922,7 +1922,7 @@
     syncDocumentTitle(normalized);
     const routeState = routePathToState(pathname);
 
-    if (routeState && routeState.guiApp) {
+    if (routeState && routeState.guiApp && !withBoot) {
       enterGuiMode(routeState.guiApp, false);
       return;
     }
@@ -1952,6 +1952,11 @@
 
     setCwd(routeState.cwd, false);
     const routeCommand = routeCommandForState(routeState);
+    if (routeState.guiApp) {
+      runBootCommand(`startx ${routeState.guiApp}`, renderToken);
+      return;
+    }
+
     if (withBoot) {
       runBootCommand(routeCommand, renderToken);
     } else {
