@@ -181,7 +181,7 @@
   const guiApps = {
     shakar: {
       title: "shakar playground",
-      src: "/shakar",
+      src: "https://shakar.shirkadeh.org",
     },
     gopoker: {
       title: "gopoker",
@@ -205,6 +205,7 @@
   const STARTUP_READY_TIMEOUT_MS = 5000;
   const FONT_READY_TIMEOUT_MS = 5000;
   const STARTUP_POLL_INTERVAL_MS = 25;
+  const SHAKAR_LEX_PROBE_TIMEOUT_MS = 1000;
   let latestRenderToken = 0;
   let isAnimating = false;
   let isSyntheticSubmit = false;
@@ -214,6 +215,25 @@
   let lastTabInput = null;
   let bootAnimationReadyPromise = null;
   let hasBootAnimationReadiness = false;
+  const shakar = {
+    active: false,
+    ready: false,
+    pending: false,
+    worker: null,
+    debugPyTrace: false,
+    continuation: false,
+    lines: [],
+    nextIndent: "",
+    history: [],
+    historyCursor: -1,
+    historyDraft: "",
+    liveHighlightId: 0,
+    rowHighlightId: 0,
+    rowHighlightTargets: new Map(),
+    lexProbeId: 0,
+    lexProbeTargets: new Map(),
+    submitting: false,
+  };
 
   appEl.innerHTML = [
     '<main id="screen" class="screen" aria-label="Interactive terminal">',
@@ -221,6 +241,7 @@
     '  <form id="terminal-form" class="input-wrap" autocomplete="off">',
     '    <div class="input-row">',
     '      <label class="input-prompt" for="terminal-input" id="active-prompt"></label>',
+    '      <pre id="terminal-input-highlight" class="cmd-input-highlight" aria-hidden="true"></pre>',
     '      <textarea id="terminal-input" class="cmd-input" rows="1" wrap="soft" spellcheck="false" autofocus aria-label="Terminal command"></textarea>',
     "    </div>",
     "  </form>",
@@ -240,6 +261,7 @@
   const outputEl = document.getElementById("output");
   const formEl = document.getElementById("terminal-form");
   const inputEl = document.getElementById("terminal-input");
+  const inputHighlightEl = document.getElementById("terminal-input-highlight");
   const promptEl = document.getElementById("active-prompt");
   const guiLayerEl = document.getElementById("gui-layer");
   const guiTitleTextEl = document.getElementById("gui-titlebar-text");
@@ -447,6 +469,10 @@
   }
 
   function promptText() {
+    if (shakar.active) {
+      return shakar.continuation ? "... " : ">>> ";
+    }
+
     const mobile = window.matchMedia("(max-width: 700px)").matches;
     const displayHost = mobile ? hostSegment[0] : hostSegment;
     return `bkazemi@${displayHost}:${state.cwd}$`;
@@ -474,6 +500,9 @@
     const lineHeight = Number.parseFloat(window.getComputedStyle(inputEl).lineHeight) || 0;
     const nextHeight = Math.max(inputEl.scrollHeight, lineHeight);
     inputEl.style.height = `${nextHeight}px`;
+    if (inputHighlightEl) {
+      inputHighlightEl.style.height = `${nextHeight}px`;
+    }
     ensureInputVisible();
   }
 
@@ -920,10 +949,18 @@
   function appendCommand(command) {
     const row = document.createElement("div");
     row.className = "line command-row";
-    row.innerHTML =
-      `<span class="input-prompt">${escapeHtml(promptText())}</span>` +
-      `<span class="cmd">${escapeHtml(command)}</span>`;
+    const promptSpan = document.createElement("span");
+    promptSpan.className = "input-prompt";
+    promptSpan.textContent = promptText();
+    const cmdSpan = document.createElement("span");
+    cmdSpan.className = "cmd";
+    cmdSpan.textContent = command;
+    row.appendChild(promptSpan);
+    row.appendChild(cmdSpan);
     outputEl.appendChild(row);
+    if (shakar.active && shakar.ready && command) {
+      requestShakarRowHighlight(command, cmdSpan);
+    }
     scrollToBottom();
   }
 
@@ -977,6 +1014,107 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#39;");
+  }
+
+  function highlightedHtml(source, spans = []) {
+    const lines = source.split("\n");
+    const byLine = new Map();
+    for (const span of spans) {
+      if (!span || !span.group || span.line < 0 || span.line >= lines.length) {
+        continue;
+      }
+
+      const lineSpans = byLine.get(span.line) || [];
+      lineSpans.push(span);
+      byLine.set(span.line, lineSpans);
+    }
+
+    return lines.map((line, lineIndex) => {
+      const lineSpans = (byLine.get(lineIndex) || [])
+        .slice()
+        .sort((a, b) => a.col_start - b.col_start || a.col_end - b.col_end);
+      let cursor = 0;
+      let html = "";
+
+      for (const span of lineSpans) {
+        const start = Math.max(cursor, Math.min(line.length, span.col_start));
+        const end = Math.max(start, Math.min(line.length, span.col_end));
+        if (start > cursor) {
+          html += escapeHtml(line.slice(cursor, start));
+        }
+        if (end > start) {
+          html += `<span class="hl-${escapeHtml(span.group)}">${escapeHtml(line.slice(start, end))}</span>`;
+        }
+        cursor = end;
+      }
+
+      if (cursor < line.length) {
+        html += escapeHtml(line.slice(cursor));
+      }
+
+      return html || " ";
+    }).join("\n");
+  }
+
+  function setShakarLiveHighlightFallback() {
+    if (!inputHighlightEl) {
+      return;
+    }
+    inputHighlightEl.innerHTML = escapeHtml(inputEl.value) || " ";
+  }
+
+  function requestShakarLiveHighlight() {
+    if (!inputHighlightEl || !shakar.active) {
+      return;
+    }
+
+    if (!shakar.ready || !shakar.worker) {
+      setShakarLiveHighlightFallback();
+      return;
+    }
+
+    const code = inputEl.value;
+    const requestId = ++shakar.liveHighlightId;
+    shakar.worker.postMessage({
+      type: "highlight",
+      code,
+      target: "terminal-live",
+      requestId,
+    });
+  }
+
+  function requestShakarRowHighlight(code, el) {
+    if (!shakar.ready || !shakar.worker || !el) {
+      return;
+    }
+
+    const requestId = ++shakar.rowHighlightId;
+    shakar.rowHighlightTargets.set(requestId, { code, el });
+    shakar.worker.postMessage({
+      type: "highlight",
+      code,
+      target: "terminal-row",
+      requestId,
+    });
+  }
+
+  function handleShakarHighlightResult(msg) {
+    if (msg.target === "terminal-live") {
+      if (msg.requestId !== shakar.liveHighlightId || !inputHighlightEl) {
+        return;
+      }
+      inputHighlightEl.innerHTML = highlightedHtml(inputEl.value, msg.highlights || []);
+      return;
+    }
+
+    if (msg.target === "terminal-row") {
+      const entry = shakar.rowHighlightTargets.get(msg.requestId);
+      if (!entry) {
+        return;
+      }
+      shakar.rowHighlightTargets.delete(msg.requestId);
+      entry.el.innerHTML = highlightedHtml(entry.code, msg.highlights || []);
+    }
   }
 
   function buildAnchorHtml(url, label, external) {
@@ -1220,6 +1358,11 @@
         appendHTMLLine(linkBarHtml);
       }
 
+      if (project.terminalHint) {
+        appendBlankLine();
+        appendLine(project.terminalHint);
+      }
+
       if (project.padCatOutput) {
         appendBlankLine();
       }
@@ -1304,6 +1447,201 @@
     return { ok: true, stopChain: true };
   }
 
+  function setShakarInputEnabled(enabled) {
+    inputEl.disabled = !enabled;
+    inputEl.classList.toggle("disabled", !enabled);
+    formEl.style.display = enabled ? "" : "none";
+    if (enabled) {
+      resizeInput();
+    }
+  }
+
+  function resetShakarBlock() {
+    shakar.continuation = false;
+    shakar.lines = [];
+    shakar.nextIndent = "";
+    setPrompt();
+  }
+
+  function shakarWorkerUrl() {
+    return new URL(toAppPath("/shakar/shakar_worker.js"), window.location.href).href;
+  }
+
+  function ensureShakarWorker() {
+    if (shakar.worker) {
+      return;
+    }
+
+    shakar.worker = new Worker(shakarWorkerUrl());
+    shakar.worker.onmessage = (event) => {
+      const msg = event.data || {};
+
+      if (msg.type === "ready") {
+        shakar.ready = true;
+        shakar.pending = false;
+        appendLine("shakar repl - Ctrl-D or exit to return", "muted");
+        setShakarInputEnabled(true);
+        setPrompt();
+        requestShakarLiveHighlight();
+        inputEl.focus();
+        return;
+      }
+
+      if (msg.type === "highlight_result") {
+        handleShakarHighlightResult(msg);
+        return;
+      }
+
+      if (msg.type === "lex_probe_result") {
+        const resolve = shakar.lexProbeTargets.get(msg.requestId);
+        if (resolve) {
+          shakar.lexProbeTargets.delete(msg.requestId);
+          resolve(msg.isBlockHeader === true);
+        }
+        return;
+      }
+
+      if (msg.type === "repl_output") {
+        if (msg.text) {
+          appendLine(msg.text, msg.isError ? "error" : "");
+        }
+        shakar.pending = false;
+        setShakarInputEnabled(true);
+        setPrompt();
+        requestShakarLiveHighlight();
+        inputEl.focus();
+        return;
+      }
+
+      if (msg.type === "output" && msg.isError) {
+        appendLine(msg.text || "Failed to load Shakar.", "error");
+        shakar.pending = false;
+        setShakarInputEnabled(true);
+        setPrompt();
+        inputEl.focus();
+      }
+    };
+
+    shakar.worker.onerror = (event) => {
+      appendLine(`shakar: ${event.message || "worker error"}`, "error");
+      shakar.pending = false;
+      setShakarInputEnabled(true);
+      setPrompt();
+      inputEl.focus();
+    };
+  }
+
+  function startShakarWorker() {
+    ensureShakarWorker();
+    if (shakar.ready) {
+      return;
+    }
+
+    shakar.pending = true;
+    setShakarInputEnabled(false);
+    shakar.worker.postMessage({
+      type: "init",
+      keyBuffer: null,
+      debugPyTrace: shakar.debugPyTrace,
+      version: Date.now(),
+    });
+  }
+
+  function exitShakar() {
+    resetShakarBlock();
+    shakar.active = false;
+    shakar.pending = false;
+    screenEl.classList.remove("shakar-mode");
+    if (inputHighlightEl) {
+      inputHighlightEl.textContent = "";
+    }
+    setShakarInputEnabled(true);
+    setPrompt();
+    syncPathForCwd(false);
+  }
+
+  function isLikelyShakarBlockHeader(line) {
+    const stripped = line.replace(/#.*$/, "").trimEnd();
+    if (!stripped.endsWith(":")) {
+      return false;
+    }
+
+    const qmark = stripped.indexOf("?");
+    return qmark === -1 || stripped.indexOf(":", qmark + 1) !== stripped.length - 1;
+  }
+
+  // Ask the worker's tokenizer whether a line opens a block. Resolves to a
+  // boolean, or null when the runtime isn't ready and the caller should fall
+  // back to the synchronous heuristic.
+  function probeShakarBlockHeader(line) {
+    if (!shakar.ready || !shakar.worker) {
+      return Promise.resolve(null);
+    }
+
+    const requestId = ++shakar.lexProbeId;
+    return new Promise((resolve) => {
+      // Resolve to null on timeout so a dead/silent worker falls back to the
+      // synchronous heuristic instead of freezing the REPL behind submitting.
+      const timer = window.setTimeout(() => {
+        shakar.lexProbeTargets.delete(requestId);
+        resolve(null);
+      }, SHAKAR_LEX_PROBE_TIMEOUT_MS);
+      shakar.lexProbeTargets.set(requestId, (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      });
+      shakar.worker.postMessage({ type: "lex_probe", line, requestId });
+    });
+  }
+
+  // Whether a submitted line keeps the block open: an explicit backslash
+  // continuation (unambiguous, no probe needed) or a block header. Prefers the
+  // worker's tokenizer and falls back to isLikelyShakarBlockHeader only when the
+  // runtime is still loading.
+  async function lineExtendsBlock(line) {
+    if (line.trimEnd().endsWith("\\")) {
+      return true;
+    }
+
+    const probed = await probeShakarBlockHeader(line);
+    if (probed !== null) {
+      return probed;
+    }
+
+    return isLikelyShakarBlockHeader(line);
+  }
+
+  function indentForLine(line, extendsBlock) {
+    const indent = line.match(/^\s*/)[0];
+    return extendsBlock ? `${indent}    ` : indent;
+  }
+
+  function enterShakar() {
+    shakar.active = true;
+    screenEl.classList.add("shakar-mode");
+    shakar.historyCursor = -1;
+    shakar.historyDraft = "";
+    resetShakarBlock();
+    if (inputHighlightEl) {
+      inputHighlightEl.textContent = "";
+    }
+    setPrompt();
+    ensureShakarWorker();
+    if (shakar.ready) {
+      shakar.worker.postMessage({ type: "repl_reset" });
+      appendLine("shakar repl - Ctrl-D or exit to return", "muted");
+      setShakarInputEnabled(true);
+      inputEl.focus();
+    } else {
+      startShakarWorker();
+    }
+    return { ok: true, stopChain: true };
+  }
+
+  function doShakar() {
+    return enterShakar();
+  }
+
   function doHelp() {
     appendLine("Available commands:", "muted");
     appendLine("help | ?");
@@ -1312,6 +1650,7 @@
     appendLine("cd .. | cd ~ | cd / | cd projects | cd /projects");
     appendLine("cat <path>");
     appendLine("xdg-open <project>");
+    appendLine("shakar");
     appendLine("startx <app>");
     appendLine("history [n]");
     appendLine("home");
@@ -1351,6 +1690,10 @@
 
     if (name === "startx") {
       return doStartx(arg);
+    }
+
+    if (name === "shakar") {
+      return doShakar();
     }
 
     if (name === "xdg-open" || name === "open") {
@@ -1393,6 +1736,182 @@
     }
   }
 
+  function recordShakarHistory(source) {
+    if (!source.trim()) {
+      return;
+    }
+
+    if (shakar.history[shakar.history.length - 1] === source) {
+      return;
+    }
+
+    shakar.history.push(source);
+    if (shakar.history.length > MAX_HISTORY_ENTRIES) {
+      shakar.history.splice(0, shakar.history.length - MAX_HISTORY_ENTRIES);
+    }
+  }
+
+  function resetShakarHistoryNavigation() {
+    shakar.historyCursor = -1;
+    shakar.historyDraft = "";
+  }
+
+  function navigateShakarHistory(delta) {
+    if (shakar.continuation || shakar.pending || !shakar.history.length) {
+      return false;
+    }
+
+    if (shakar.historyCursor === -1) {
+      if (delta > 0) {
+        return false;
+      }
+      shakar.historyDraft = inputEl.value;
+      shakar.historyCursor = shakar.history.length - 1;
+    } else {
+      shakar.historyCursor += delta;
+    }
+
+    if (shakar.historyCursor < 0) {
+      shakar.historyCursor = 0;
+    } else if (shakar.historyCursor >= shakar.history.length) {
+      shakar.historyCursor = -1;
+      setInputValue(shakar.historyDraft);
+      requestShakarLiveHighlight();
+      return true;
+    }
+
+    setInputValue(shakar.history[shakar.historyCursor]);
+    requestShakarLiveHighlight();
+    return true;
+  }
+
+  function submitShakarSource(source) {
+    if (!shakar.ready || !shakar.worker) {
+      appendLine("shakar: runtime is still loading", "error");
+      return;
+    }
+
+    recordShakarHistory(source);
+    resetShakarHistoryNavigation();
+    shakar.pending = true;
+    setShakarInputEnabled(false);
+    shakar.worker.postMessage({
+      type: "repl_eval",
+      code: source,
+      debugPyTrace: shakar.debugPyTrace,
+    });
+  }
+
+  function handleShakarSlash(line) {
+    const stripped = line.trim();
+    if (!stripped.startsWith("/")) {
+      return false;
+    }
+
+    if (stripped === "/clear") {
+      doClear();
+      return true;
+    }
+
+    if (stripped === "/reset") {
+      if (shakar.worker && shakar.ready) {
+        shakar.worker.postMessage({ type: "repl_reset" });
+      }
+      resetShakarBlock();
+      appendLine("Environment reset.");
+      return true;
+    }
+
+    if (stripped.startsWith("/py-traceback")) {
+      const parts = stripped.split(/\s+/);
+      if (parts.length === 1) {
+        shakar.debugPyTrace = !shakar.debugPyTrace;
+      } else if (parts[1] === "on" || parts[1] === "off") {
+        shakar.debugPyTrace = parts[1] === "on";
+      } else {
+        appendLine("Usage: /py-traceback [on|off]", "error");
+        return true;
+      }
+
+      appendLine(`Python traceback: ${shakar.debugPyTrace ? "on" : "off"}`);
+      return true;
+    }
+
+    appendLine(`Unknown command: ${stripped}`, "error");
+    return true;
+  }
+
+  async function handleShakarSubmit(line) {
+    resetShakarHistoryNavigation();
+    lastTabInput = null;
+
+    if (shakar.pending) {
+      return;
+    }
+
+    appendCommand(line);
+
+    if (!shakar.continuation && (line.trim() === "exit" || line.trim() === "quit")) {
+      exitShakar();
+      return;
+    }
+
+    if (!shakar.continuation && handleShakarSlash(line)) {
+      return;
+    }
+
+    if (!shakar.continuation && !line.trim()) {
+      return;
+    }
+
+    shakar.lines.push(line);
+
+    // A blank line inside a block submits it — no need to probe the tokenizer.
+    if (shakar.continuation && !line.trim()) {
+      const source = shakar.lines.slice(0, -1).join("\n");
+      resetShakarBlock();
+      submitShakarSource(source);
+      return;
+    }
+
+    const extendsBlock = await lineExtendsBlock(line);
+
+    if (!shakar.continuation) {
+      if (!extendsBlock) {
+        const source = shakar.lines.join("\n");
+        resetShakarBlock();
+        submitShakarSource(source);
+        return;
+      }
+      shakar.continuation = true;
+    }
+
+    shakar.nextIndent = indentForLine(line, extendsBlock);
+    setPrompt();
+  }
+
+  // Drives a single REPL line submit. The continuation decision is now async
+  // (it awaits the worker's tokenizer), so clear the input up front and lock
+  // against a second Enter landing mid-probe, then restore the block indent.
+  async function handleShakarLineSubmit() {
+    if (shakar.submitting) {
+      return;
+    }
+    shakar.submitting = true;
+    try {
+      const line = inputEl.value.replace(/\r/g, "");
+      inputEl.value = "";
+      resizeInput();
+      await handleShakarSubmit(line);
+      inputEl.value = shakar.continuation ? shakar.nextIndent : "";
+      resizeInput();
+      requestShakarLiveHighlight();
+      inputEl.focus();
+    } finally {
+      shakar.submitting = false;
+    }
+  }
+
   function resetHistoryNavigation() {
     historyCursor = -1;
     historyDraft = "";
@@ -1420,7 +1939,7 @@
   }
 
   const COMPLETABLE_COMMANDS = [
-    "cat", "cd", "clear", "help", "history", "home", "ls", "open", "pwd", "startx", "xdg-open",
+    "cat", "cd", "clear", "help", "history", "home", "ls", "open", "pwd", "shakar", "startx", "xdg-open",
   ];
 
   function longestCommonPrefix(strings) {
@@ -1784,12 +2303,21 @@
 
     if (!canAnimate) {
       appendCommand(routeCommand);
-      runSingle(routeCommand);
+      runRouteCommand(routeCommand);
       inputEl.focus();
       return;
     }
 
     await simulateTypeAndEnter(routeCommand, renderToken);
+  }
+
+  function runRouteCommand(routeCommand) {
+    if (routeCommand === "shakar") {
+      enterShakar();
+      return;
+    }
+
+    runSingle(routeCommand);
   }
 
   async function runBootNotFound(pathname, renderToken) {
@@ -1915,7 +2443,7 @@
     setNotFoundRecoveryCommand();
   }
 
-  function renderRoute(pathname, withBoot = false) {
+  function renderRoute(pathname, withBoot = false, bootCommandOverride = "") {
     latestRenderToken++;
     const renderToken = latestRenderToken;
     const normalized = inferRoutePath(pathname);
@@ -1951,7 +2479,7 @@
     }
 
     setCwd(routeState.cwd, false);
-    const routeCommand = routeCommandForState(routeState);
+    const routeCommand = bootCommandOverride || routeCommandForState(routeState);
     if (routeState.guiApp) {
       runBootCommand(`startx ${routeState.guiApp}`, renderToken);
       return;
@@ -1961,7 +2489,7 @@
       runBootCommand(routeCommand, renderToken);
     } else {
       appendCommand(routeCommand);
-      runSingle(routeCommand);
+      runRouteCommand(routeCommand);
       inputEl.focus();
     }
   }
@@ -2000,6 +2528,12 @@
     if (isAnimating) {
       return;
     }
+
+    if (shakar.active) {
+      handleShakarLineSubmit();
+      return;
+    }
+
     const command = inputEl.value.trim();
     if (!isSyntheticSubmit) {
       recordHistory(command);
@@ -2009,6 +2543,9 @@
     appendCommand(command);
     runCommandLine(command);
     inputEl.value = "";
+    if (shakar.active) {
+      requestShakarLiveHighlight();
+    }
     setPrompt();
     resizeInput();
     inputEl.focus();
@@ -2019,7 +2556,12 @@
       event.target.value = "";
       return;
     }
-    resetHistoryNavigation();
+    if (shakar.active) {
+      resetShakarHistoryNavigation();
+      requestShakarLiveHighlight();
+    } else {
+      resetHistoryNavigation();
+    }
     lastTabInput = null;
     resizeInput();
   });
@@ -2029,12 +2571,37 @@
     const isArrowUp = event.key === "ArrowUp";
     const isArrowDown = event.key === "ArrowDown";
 
+    if (event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === "d" && shakar.active) {
+      if (!inputEl.value && !shakar.pending) {
+        event.preventDefault();
+        exitShakar();
+      }
+      return;
+    }
+
+    if (event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === "c" && shakar.active) {
+      event.preventDefault();
+      if (!shakar.pending) {
+        appendCommand(inputEl.value);
+        appendLine("KeyboardInterrupt");
+        resetShakarBlock();
+        inputEl.value = "";
+        resizeInput();
+        requestShakarLiveHighlight();
+      }
+      return;
+    }
+
     if (!hasModifier && (isArrowUp || isArrowDown)) {
       if (isAnimating) {
         return;
       }
 
-      const didNavigate = isArrowUp ? navigateHistoryUp() : navigateHistoryDown();
+      const didNavigate = shakar.active
+        ? navigateShakarHistory(isArrowUp ? -1 : 1)
+        : isArrowUp
+          ? navigateHistoryUp()
+          : navigateHistoryDown();
       if (didNavigate) {
         event.preventDefault();
       }
@@ -2043,7 +2610,16 @@
 
     if (event.key === "Tab" && !hasModifier) {
       event.preventDefault();
-      if (!isAnimating) {
+      if (shakar.active) {
+        const start = inputEl.selectionStart;
+        const end = inputEl.selectionEnd;
+        const value = inputEl.value;
+        inputEl.value = `${value.slice(0, start)}    ${value.slice(end)}`;
+        inputEl.selectionStart = start + 4;
+        inputEl.selectionEnd = start + 4;
+        resizeInput();
+        requestShakarLiveHighlight();
+      } else if (!isAnimating) {
         handleTabCompletion();
       }
       return;
@@ -2080,6 +2656,25 @@
     resizeInput();
   });
 
+  function consumeStartupCommand() {
+    const params = new URLSearchParams(window.location.search);
+    const command = params.get("cmd");
+    if (command !== "shakar") {
+      return "";
+    }
+
+    params.delete("cmd");
+    const nextSearch = params.toString();
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
+    try {
+      window.history.replaceState({}, "", nextUrl);
+    } catch {
+      // Keep boot working if history APIs are restricted.
+    }
+    return command;
+  }
+
+  const startupCommand = consumeStartupCommand();
   const strippedPath = normalizePathname(stripBasePath(window.location.pathname));
   const inferredPath = inferRoutePath(window.location.pathname);
   if (strippedPath !== inferredPath) {
@@ -2088,5 +2683,5 @@
 
   setPrompt();
   resizeInput();
-  renderRoute(window.location.pathname, true);
+  renderRoute(window.location.pathname, true, startupCommand);
 })();

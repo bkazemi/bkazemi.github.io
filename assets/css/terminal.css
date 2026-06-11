@@ -167,6 +167,8 @@ body {
 }
 
 .cmd-input {
+  position: relative;
+  z-index: 2;
   width: 100%;
   min-width: 100%;
   min-height: 1.6em;
@@ -189,6 +191,58 @@ body {
   line-height: inherit;
   caret-color: var(--accent);
 }
+
+.cmd-input-highlight {
+  position: absolute;
+  inset: 0 auto auto 0;
+  z-index: 1;
+  display: none;
+  width: 100%;
+  min-height: 1.6em;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  text-indent: calc(var(--prompt-width) + var(--prompt-gap));
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  line-height: inherit;
+  pointer-events: none;
+  user-select: none;
+}
+
+.screen.shakar-mode .cmd-input-highlight {
+  display: block;
+}
+
+.screen.shakar-mode .cmd-input {
+  color: transparent;
+}
+
+.hl-keyword { color: #c792ea; }
+.hl-string { color: #c3e88d; }
+.hl-number { color: #f78c6c; }
+.hl-boolean { color: #ff9cac; }
+.hl-constant { color: #89ddff; }
+.hl-operator { color: #89ddff; }
+.hl-punctuation { color: #89ddff; }
+.hl-identifier { color: var(--text); }
+.hl-function { color: #82aaff; }
+.hl-decorator { color: #c792ea; font-style: italic; }
+.hl-property { color: #f07178; }
+.hl-comment { color: #676e95; font-style: italic; }
+.hl-regex { color: #89ddff; }
+.hl-path { color: #c3e88d; }
+.hl-unit { color: #ffcb6b; }
+.hl-type { color: #ffcb6b; }
+.hl-implicit_subject { color: #f78c6c; font-weight: 600; }
+.hl-hook { color: #c792ea; }
+.hl-error { color: var(--error); text-decoration: underline; text-decoration-style: wavy; }
+.hl-warning { color: #ffcb6b; text-decoration: underline; text-decoration-style: wavy; }
 
 .cmd-input:focus {
   outline: none;
@@ -218,6 +272,10 @@ body {
 
   .cmd-input {
     min-width: 100%;
+    font-size: 16px;
+  }
+
+  .cmd-input-highlight {
     font-size: 16px;
   }
 
