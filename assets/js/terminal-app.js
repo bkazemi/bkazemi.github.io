@@ -1525,6 +1525,21 @@
     shakar.worker.onerror = (event) => {
       appendLine(`shakar: ${event.message || "worker error"}`, "error");
       shakar.pending = false;
+
+      // A worker that errored before it ever signalled ready never came up
+      // (e.g. failed to load). Drop the dead worker and leave the repl so the
+      // user isn't stranded at a non-functional >>> prompt, and a later
+      // `shakar` retries with a fresh worker.
+      if (!shakar.ready) {
+        if (shakar.worker) {
+          shakar.worker.terminate();
+          shakar.worker = null;
+        }
+        exitShakar();
+        inputEl.focus();
+        return;
+      }
+
       setShakarInputEnabled(true);
       setPrompt();
       inputEl.focus();
