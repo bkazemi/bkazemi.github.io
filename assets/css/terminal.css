@@ -71,8 +71,7 @@ body {
   max-width: 100%;
   font-family: "Noto Sans Mono", "DejaVu Sans Mono", "Courier New", monospace;
   white-space: pre;
-  overflow-x: auto;
-  overflow-y: visible;
+  overflow: visible;
   overflow-wrap: normal;
   word-break: normal;
   line-height: 1.05;
