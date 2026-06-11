@@ -690,6 +690,7 @@
     p.textContent = text;
     outputEl.appendChild(p);
     scrollToBottom();
+    return p;
   }
 
   function appendHTMLLine(html, className = "") {
@@ -698,6 +699,150 @@
     p.innerHTML = html;
     outputEl.appendChild(p);
     scrollToBottom();
+    return p;
+  }
+
+  function blockRects(ch) {
+    const full = [[0, 0, 8, 16]];
+    const lower = (eighths) => [[0, 16 - eighths * 2, 8, eighths * 2]];
+    const left = (eighths) => [[0, 0, eighths, 16]];
+    const right = (eighths) => [[8 - eighths, 0, eighths, 16]];
+    const upperLeft = [0, 0, 4, 8];
+    const upperRight = [4, 0, 4, 8];
+    const lowerLeft = [0, 8, 4, 8];
+    const lowerRight = [4, 8, 4, 8];
+
+    switch (ch) {
+      case "█": return full;
+      case "▁": return lower(1);
+      case "▂": return lower(2);
+      case "▃": return lower(3);
+      case "▄": return lower(4);
+      case "▅": return lower(5);
+      case "▆": return lower(6);
+      case "▇": return lower(7);
+      case "▀": return [[0, 0, 8, 8]];
+      case "▔": return [[0, 0, 8, 2]];
+      case "▉": return left(7);
+      case "▋": return left(5);
+      case "▌": return left(4);
+      case "▍": return left(3);
+      case "▎": return left(2);
+      case "▏": return left(1);
+      case "▐": return right(4);
+      case "▕": return right(1);
+      case "▖": return [lowerLeft];
+      case "▗": return [lowerRight];
+      case "▘": return [upperLeft];
+      case "▝": return [upperRight];
+      case "▙": return [upperLeft, lowerLeft, lowerRight];
+      case "▛": return [upperLeft, upperRight, lowerLeft];
+      case "▜": return [upperLeft, upperRight, lowerRight];
+      case "▟": return [upperRight, lowerLeft, lowerRight];
+      default: return [];
+    }
+  }
+
+  function uniqueArtGlyphs(art) {
+    return Array.from(new Set(Array.from(art).filter((ch) => ch !== " " && ch !== "\n")));
+  }
+
+  function glyphAdvance(el, offset) {
+    const range = document.createRange();
+    range.setStart(el.firstChild, offset);
+    range.setEnd(el.firstChild, offset + 1);
+    const width = range.getBoundingClientRect().width;
+    range.detach();
+    return width;
+  }
+
+  function blockArtNeedsFallback(renderedEl, art) {
+    if (!renderedEl.firstChild) {
+      return true;
+    }
+
+    if (renderedEl.scrollHeight > renderedEl.clientHeight + 1) {
+      return true;
+    }
+
+    const glyphs = uniqueArtGlyphs(art);
+    if (!glyphs.length) {
+      return false;
+    }
+
+    const probe = document.createElement("span");
+    probe.className = "line ascii-art";
+    probe.setAttribute("aria-hidden", "true");
+    probe.style.position = "absolute";
+    probe.style.visibility = "hidden";
+    probe.style.pointerEvents = "none";
+    probe.style.whiteSpace = "pre";
+    probe.textContent = glyphs.join("");
+    outputEl.appendChild(probe);
+
+    const widths = glyphs.map((_, index) => glyphAdvance(probe, index));
+    probe.remove();
+
+    const referenceWidth = widths[0];
+    if (!Number.isFinite(referenceWidth) || referenceWidth <= 0) {
+      return true;
+    }
+
+    return widths.some((width) => Math.abs(width - referenceWidth) > 0.5);
+  }
+
+  function createAsciiSvgLine(art) {
+    const lines = art.split("\n");
+    const columns = Math.max(...lines.map((line) => Array.from(line).length));
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "ascii-art-svg");
+    svg.setAttribute("viewBox", `0 0 ${columns * 8} ${lines.length * 16}`);
+    svg.setAttribute("width", `${columns}ch`);
+    svg.setAttribute("height", `${lines.length}em`);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", art);
+    svg.setAttribute("preserveAspectRatio", "xMinYMin meet");
+
+    lines.forEach((line, row) => {
+      Array.from(line).forEach((ch, column) => {
+        blockRects(ch).forEach(([x, y, width, height]) => {
+          const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          rect.setAttribute("x", column * 8 + x);
+          rect.setAttribute("y", row * 16 + y);
+          rect.setAttribute("width", width);
+          rect.setAttribute("height", height);
+          svg.appendChild(rect);
+        });
+      });
+    });
+
+    const p = document.createElement("p");
+    p.className = "line ascii-art ascii-art-fallback";
+    p.appendChild(svg);
+    return p;
+  }
+
+  function renderAsciiArt(art) {
+    const probe = document.createElement("p");
+    probe.className = "line ascii-art";
+    probe.setAttribute("aria-hidden", "true");
+    probe.style.position = "absolute";
+    probe.style.visibility = "hidden";
+    probe.style.pointerEvents = "none";
+    probe.style.whiteSpace = "pre";
+    probe.textContent = art;
+    outputEl.appendChild(probe);
+
+    const needsFallback = blockArtNeedsFallback(probe, art);
+    probe.remove();
+
+    if (needsFallback) {
+      outputEl.appendChild(createAsciiSvgLine(art));
+      scrollToBottom();
+      return;
+    }
+
+    appendLine(art, "ascii-art");
   }
 
   function appendBlankLine() {
@@ -1047,7 +1192,7 @@
 
       const asciiArt = projectAsciiArt(project);
       if (asciiArt) {
-        appendLine(asciiArt, "ascii-art");
+        renderAsciiArt(asciiArt);
         if (project.padAfterAscii) {
           appendBlankLine();
         }
