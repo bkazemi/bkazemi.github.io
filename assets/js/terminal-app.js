@@ -1464,7 +1464,7 @@
   }
 
   function shakarWorkerUrl() {
-    return new URL(toAppPath("/shakar/shakar_worker.js"), window.location.href).href;
+    return new URL(toAppPath("/assets/shakar/shakar_worker.js"), window.location.href).href;
   }
 
   function ensureShakarWorker() {
