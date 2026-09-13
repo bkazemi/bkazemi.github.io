@@ -108,6 +108,33 @@
   const SCRIPT_SUFFIX = "/assets/js/terminal-app.js";
 
   const projects = {
+    kabobagool: {
+      name: "kabobagool",
+      routePath: "/projects/kabobagool",
+      padCatOutput: true,
+      description: "A prediction market arbitrage bot for Polymarket and Kalshi, supporting same-market and cross-exchange strategies with multi-market orchestration.",
+      linkBar: [
+        { label: "Project Page", url: "https://github.com/bkazemi/kabobagool", external: true },
+      ],
+    },
+    bkgammon: {
+      name: "bkgammon",
+      routePath: "/projects/bkgammon",
+      padCatOutput: true,
+      description: "A work-in-progress backgammon game.",
+      linkBar: [
+        { label: "Project Page", url: "https://github.com/bkazemi/bkgammon", external: true },
+      ],
+    },
+    fodder: {
+      name: "fodder",
+      routePath: "/projects/fodder",
+      padCatOutput: true,
+      description: "A small Go program that uses OCR to recognize usernames in video game streams. A work in progress, written while learning Go.",
+      linkBar: [
+        { label: "Project Page", url: "https://github.com/bkazemi/fodder", external: true },
+      ],
+    },
     trop: {
       name: "trop",
       routePath: "/projects/trop",
