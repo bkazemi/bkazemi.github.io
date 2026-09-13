@@ -121,6 +121,7 @@
       name: "bkgammon",
       routePath: "/projects/bkgammon",
       padCatOutput: true,
+      pointFrame: true,
       description: "A work-in-progress backgammon game.",
       linkBar: [
         { label: "Project Page", url: "https://github.com/bkazemi/bkgammon", external: true },
@@ -907,6 +908,35 @@
     appendHTMLLine("&nbsp;");
   }
 
+  function renderBackgammonPoints(downward) {
+    // CLI left half: points 11–6 above, 12–17 below (zero-based).
+    const counts = [5, 0, 0, 0, 3, 0];
+    const colors = downward ? ["blue", "red"] : ["red", "blue"];
+    const row = document.createElement("div");
+    row.className = "backgammon-points";
+    row.setAttribute("aria-hidden", "true");
+    for (let index = 0; index < 6; index++) {
+      // Start each stack on the widest row, at the point's base.
+      const lines = ["\\       /", " \\     / ", "  \\   /  ", "   \\ /   ", "    .    "];
+      const color = colors[index === 0 ? 0 : 1];
+      const rendered = lines.map((line, depth) => {
+        if (!downward) {
+          line = line.replace(/[\\/]/g, (slash) => slash === "/" ? "\\" : "/");
+        }
+        if (depth < counts[index]) {
+          return `${line.slice(0, 4)}<span class="backgammon-chip-${color}">O</span>${line.slice(5)}`;
+        }
+        return line;
+      });
+      if (!downward) rendered.reverse();
+      const outline = document.createElement("pre");
+      outline.innerHTML = rendered.join("\n");
+      row.appendChild(outline);
+    }
+    outputEl.appendChild(row);
+    return row;
+  }
+
   function maxArtColumns(art) {
     return art
       .split("\n")
@@ -1346,6 +1376,12 @@
         appendBlankLine();
       }
 
+      let pointFrameStart;
+      if (project.pointFrame) {
+        pointFrameStart = renderBackgammonPoints(true);
+        appendBlankLine();
+      }
+
       if (project.headerLinks && project.headerLinks.length > 0) {
         const linksHtml = project.headerLinks
           .map((link) => buildAnchorHtml(link.url, link.label, link.external))
@@ -1390,6 +1426,18 @@
       if (project.terminalHint) {
         appendBlankLine();
         appendLine(project.terminalHint);
+      }
+
+      if (project.pointFrame) {
+        appendBlankLine();
+        renderBackgammonPoints(false);
+        const board = document.createElement("div");
+        board.className = "backgammon-board";
+        outputEl.insertBefore(board, pointFrameStart);
+        // Enclose both point rows and the existing project content.
+        while (board.nextSibling) {
+          board.appendChild(board.nextSibling);
+        }
       }
 
       if (project.padCatOutput) {

@@ -98,6 +98,36 @@ body {
   margin-top: 0.8em;
 }
 
+.backgammon-board {
+  width: fit-content;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.backgammon-points {
+  display: flex;
+  justify-content: space-between;
+  width: 59ch;
+  max-width: 100%;
+  font-size: clamp(8px, calc((100vw - 48px) / 36), 16px);
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.backgammon-chip-red {
+  color: #ef5555;
+}
+
+.backgammon-chip-blue {
+  color: #578bff;
+}
+
+.backgammon-points pre {
+  margin: 0;
+  font: inherit;
+  white-space: pre;
+}
+
 .cmd {
   color: var(--text);
 }
