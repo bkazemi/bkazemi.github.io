@@ -180,8 +180,11 @@
         "█▎▐▋▐█████▍█▍▐▊▐▌▕█▕██▌ █▇▇▊▕█▏\n" +
         "▝▜█▋▐█████▌█▇█▘▝█▇▛▕█▝█▖▀▇▆▎▕█▏\n" +
         "▗▆█▘ ▝▜▜▛▘ █▍",
-      description: "a poker game made in golang.",
-      cta: { label: "try it here", url: "https://poker.shirkadeh.org", external: true },
+      description: "A poker game made in golang.",
+      linkBar: [
+        { label: "Project Page", url: "https://github.com/bkazemi/gopoker", external: true },
+        { label: "Try It Out", url: "https://poker.shirkadeh.org", external: true },
+      ],
     },
     shakar: {
       name: "shakar",
@@ -237,6 +240,7 @@
   const STARTUP_POLL_INTERVAL_MS = 25;
   const SHAKAR_LEX_PROBE_TIMEOUT_MS = 1000;
   let latestRenderToken = 0;
+  const backgammonDemoCleanups = new Set();
   let isAnimating = false;
   let isSyntheticSubmit = false;
   const commandHistory = [];
@@ -969,33 +973,80 @@
     appendHTMLLine("&nbsp;");
   }
 
-  function renderBackgammonPoints(downward) {
+  function initialBackgammonPoints() {
+    const points = Array.from({ length: 24 }, () => ({ color: "", count: 0 }));
+    for (const [point, color, count] of [[11, "blue", 5], [7, "red", 3], [12, "red", 5], [16, "blue", 3]]) {
+      points[point] = { color, count };
+    }
+    return points;
+  }
+
+  function renderBackgammonPoints(downward, points = initialBackgammonPoints(), existingRow = null) {
     // CLI left half: points 11–6 above, 12–17 below (zero-based).
-    const counts = [5, 0, 0, 0, 3, 0];
-    const colors = downward ? ["blue", "red"] : ["red", "blue"];
-    const row = document.createElement("div");
+    const row = existingRow || document.createElement("div");
     row.className = "backgammon-points";
     row.setAttribute("aria-hidden", "true");
+    row.replaceChildren();
     for (let index = 0; index < 6; index++) {
+      const pointIndex = downward ? 11 - index : 12 + index;
+      const { color, count } = points[pointIndex];
       // Start each stack on the widest row, at the point's base.
       const lines = ["\\       /", " \\     / ", "  \\   /  ", "   \\ /   ", "    .    "];
-      const color = colors[index === 0 ? 0 : 1];
       const rendered = lines.map((line, depth) => {
         if (!downward) {
           line = line.replace(/[\\/]/g, (slash) => slash === "/" ? "\\" : "/");
         }
-        if (depth < counts[index]) {
+        if (depth < count) {
           return `${line.slice(0, 4)}<span class="backgammon-chip-${color}">O</span>${line.slice(5)}`;
         }
         return line;
       });
       if (!downward) rendered.reverse();
       const outline = document.createElement("pre");
+      outline.dataset.point = pointIndex;
       outline.innerHTML = rendered.join("\n");
       row.appendChild(outline);
     }
-    outputEl.appendChild(row);
+    if (!existingRow) outputEl.appendChild(row);
     return row;
+  }
+
+  function renderBackgammonDemo(board) {
+    const [top, bottom] = board.querySelectorAll(".backgammon-points");
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    // Blue advances toward higher indices; red decreases.
+    const turns = [
+      { dice: [3, 1], moves: [[11, 14], [16, 17]] },
+      { dice: [4, 2], moves: [[12, 8], [8, 6]] },
+      { dice: [5, 2], moves: [[11, 16], [11, 13]] },
+      { dice: [6, 1], moves: [[12, 6], [7, 6]] },
+      { dice: [4, 6], moves: [[11, 15], [11, 17]] },
+      { dice: [5, 3], moves: [[12, 7], [12, 9]] },
+    ];
+    // Pause before each turn and after the final move, then redraw the opening.
+    const frames = turns.flatMap((turn) => [null, ...turn.moves]);
+    frames.push(null);
+    let points = initialBackgammonPoints();
+    let step = 0;
+    const redraw = () => {
+      renderBackgammonPoints(true, points, top);
+      renderBackgammonPoints(false, points, bottom);
+    };
+    redraw();
+    const timer = window.setInterval(() => {
+      if (document.hidden || motion.matches) return;
+      step = (step + 1) % frames.length;
+      if (step === 0) points = initialBackgammonPoints();
+      const move = frames[step];
+      if (move) {
+        const [from, to] = move;
+        points[from].count--;
+        points[to].color = points[from].color;
+        points[to].count++;
+      }
+      redraw();
+    }, 2500);
+    backgammonDemoCleanups.add(() => window.clearInterval(timer));
   }
 
   function maxArtColumns(art) {
@@ -1329,6 +1380,8 @@
   }
 
   function doClear() {
+    backgammonDemoCleanups.forEach((cleanup) => cleanup());
+    backgammonDemoCleanups.clear();
     outputEl.textContent = "";
     return { ok: true };
   }
@@ -1501,6 +1554,7 @@
         while (board.nextSibling) {
           board.appendChild(board.nextSibling);
         }
+        renderBackgammonDemo(board);
       }
 
       if (project.padCatOutput) {
