@@ -89,6 +89,29 @@ body {
   fill: currentColor;
 }
 
+.gopoker-chip {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: gopoker-chip-spin 25s linear infinite;
+  cursor: pointer;
+}
+
+.gopoker-chip[aria-pressed="true"] {
+  animation-play-state: paused;
+}
+
+@keyframes gopoker-chip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gopoker-chip {
+    animation: none;
+  }
+}
+
 .desc-para {
   white-space: normal;
   max-width: 72ch;

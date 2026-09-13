@@ -161,6 +161,8 @@
       routePath: "/projects/gopoker",
       padCatOutput: true,
       padAfterAscii: true,
+      chipColumns: [9, 25],
+      chipColumnsMobile: [4, 11],
       asciiArt:
         "                                             ▕██▋\n" +
         "                                             ▕██▋\n" +
@@ -806,6 +808,7 @@
       case "▀": return [[0, 0, 8, 8]];
       case "▔": return [[0, 0, 8, 2]];
       case "▉": return left(7);
+      case "▊": return left(6);
       case "▋": return left(5);
       case "▌": return left(4);
       case "▍": return left(3);
@@ -873,7 +876,7 @@
     return widths.some((width) => Math.abs(width - referenceWidth) > 0.5);
   }
 
-  function createAsciiSvgLine(art) {
+  function createAsciiSvgLine(art, chipColumns = null) {
     const lines = art.split("\n");
     const columns = Math.max(...lines.map((line) => Array.from(line).length));
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -881,22 +884,37 @@
     svg.setAttribute("viewBox", `0 0 ${columns * 8} ${lines.length * 16}`);
     svg.setAttribute("width", `${columns}ch`);
     svg.setAttribute("height", `${lines.length}em`);
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", art);
+    svg.setAttribute("role", chipColumns ? "group" : "img");
+    svg.setAttribute("aria-label", chipColumns ? "gopoker" : art);
     svg.setAttribute("preserveAspectRatio", "xMinYMin meet");
 
+    let chip;
+    if (chipColumns) {
+      chip = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      chip.setAttribute("class", "gopoker-chip");
+      enableChipPause(chip);
+      svg.appendChild(chip);
+    }
+
+    const artPath = [];
+    const chipPath = [];
     lines.forEach((line, row) => {
       Array.from(line).forEach((ch, column) => {
         blockRects(ch).forEach(([x, y, width, height]) => {
-          const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-          rect.setAttribute("x", column * 8 + x);
-          rect.setAttribute("y", row * 16 + y);
-          rect.setAttribute("width", width);
-          rect.setAttribute("height", height);
-          svg.appendChild(rect);
+          // Column bounds include only the chip that forms the first "o".
+          const isChip = chip && column >= chipColumns[0] && column < chipColumns[1];
+          (isChip ? chipPath : artPath).push(
+            `M${column * 8 + x} ${row * 16 + y}h${width}v${height}h${-width}z`
+          );
         });
       });
     });
+
+    // Fill adjacent blocks together to avoid antialiasing seams in Firefox.
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", artPath.join(""));
+    svg.appendChild(path);
+    if (chip) chip.setAttribute("d", chipPath.join(""));
 
     const p = document.createElement("p");
     p.className = "line ascii-art ascii-art-fallback";
@@ -904,7 +922,27 @@
     return p;
   }
 
-  function renderAsciiArt(art) {
+  function enableChipPause(chip) {
+    chip.setAttribute("role", "button");
+    chip.setAttribute("aria-label", "Pause chip rotation");
+    chip.setAttribute("aria-pressed", "false");
+
+    const togglePause = () => {
+      chip.setAttribute("aria-pressed", chip.getAttribute("aria-pressed") !== "true");
+    };
+    chip.addEventListener("click", (event) => {
+      event.stopPropagation();
+      togglePause();
+    });
+  }
+
+  function renderAsciiArt(art, chipColumns = null) {
+    if (chipColumns) {
+      outputEl.appendChild(createAsciiSvgLine(art, chipColumns));
+      scrollToBottom();
+      return;
+    }
+
     const probe = document.createElement("p");
     probe.className = "line ascii-art";
     probe.setAttribute("aria-hidden", "true");
@@ -1418,7 +1456,9 @@
 
       const asciiArt = projectAsciiArt(project);
       if (asciiArt) {
-        renderAsciiArt(asciiArt);
+        const chipColumns = asciiArt === project.asciiArtMobile
+          ? project.chipColumnsMobile : project.chipColumns;
+        renderAsciiArt(asciiArt, chipColumns);
         if (project.padAfterAscii) {
           appendBlankLine();
         }
