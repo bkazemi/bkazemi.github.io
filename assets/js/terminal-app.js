@@ -270,7 +270,7 @@
     '  <section id="output" class="output" aria-live="polite"></section>',
     '  <form id="terminal-form" class="input-wrap" autocomplete="off">',
     '    <div class="input-row">',
-    '      <label class="input-prompt" for="terminal-input" id="active-prompt"></label>',
+    '      <span class="input-prompt" id="active-prompt"></span>',
     '      <pre id="terminal-input-highlight" class="cmd-input-highlight" aria-hidden="true"></pre>',
     '      <textarea id="terminal-input" class="cmd-input" rows="1" wrap="soft" spellcheck="false" autofocus aria-label="Terminal command"></textarea>',
     "    </div>",
@@ -520,8 +520,31 @@
     return arg.replace(/\/+$/, "");
   }
 
+  function renderPrompt(element) {
+    const text = promptText();
+    element.textContent = text;
+    if (shakar.active || state.cwd === "/") {
+      return;
+    }
+
+    element.textContent = text.slice(0, -(state.cwd.length + 1));
+    let path = "";
+    for (const part of state.cwd.split("/").filter(Boolean)) {
+      element.append("/");
+      path += `/${part}`;
+      const link = document.createElement("a");
+      link.className = "prompt-path";
+      link.href = toAppPath(path);
+      link.dataset.action = "cd";
+      link.dataset.path = path;
+      link.textContent = part;
+      element.appendChild(link);
+    }
+    element.append("$");
+  }
+
   function setPrompt() {
-    promptEl.textContent = promptText();
+    renderPrompt(promptEl);
     syncPromptWidth();
   }
 
@@ -1010,7 +1033,7 @@
     row.className = "line command-row";
     const promptSpan = document.createElement("span");
     promptSpan.className = "input-prompt";
-    promptSpan.textContent = promptText();
+    renderPrompt(promptSpan);
     const cmdSpan = document.createElement("span");
     cmdSpan.className = "cmd";
     cmdSpan.textContent = command;
@@ -2469,11 +2492,13 @@
   }
 
   function runDirectoryClick(path) {
+    if (shakar.active) {
+      exitShakar();
+    }
     const normalizedPath = normalizeCdArg(path) || ".";
-    const renderedPath = normalizedPath === "/" ? "/" : `${normalizedPath}/`;
-    const command = `cd ${renderedPath} && ls`;
+    const command = `cd ${normalizedPath} && ls`;
     appendCommand(command);
-    const cdResult = runSingle(`cd ${renderedPath}`);
+    const cdResult = runSingle(`cd ${normalizedPath}`);
     if (cdResult.ok) {
       runSingle("ls");
     }
@@ -2596,13 +2621,13 @@
     }
   }
 
-  outputEl.addEventListener("click", (event) => {
+  screenEl.addEventListener("click", (event) => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
       return;
     }
 
     const target = event.target;
-    if (!(target instanceof HTMLElement) || !target.classList.contains("entry-link")) {
+    if (!(target instanceof HTMLElement) || !target.matches(".entry-link, .prompt-path")) {
       return;
     }
 

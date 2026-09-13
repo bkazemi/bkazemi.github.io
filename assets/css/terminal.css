@@ -195,6 +195,26 @@ body {
   white-space: nowrap;
 }
 
+#active-prompt {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.prompt-path {
+  color: inherit;
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.prompt-path:hover {
+  text-decoration: underline;
+}
+
+.prompt-path:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .cmd-input {
   position: relative;
   z-index: 2;
