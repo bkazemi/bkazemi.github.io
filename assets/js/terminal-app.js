@@ -2571,6 +2571,10 @@
   }
 
   outputEl.addEventListener("click", (event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+      return;
+    }
+
     const target = event.target;
     if (!(target instanceof HTMLElement) || !target.classList.contains("entry-link")) {
       return;
