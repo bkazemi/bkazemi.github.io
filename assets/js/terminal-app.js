@@ -1713,19 +1713,57 @@
     return enterShakar();
   }
 
+  const COMMANDS = [
+    { name: "help", aliases: ["?"], usage: "help | ?", run: doHelp },
+    { name: "ls", usage: "ls [path]", run: doLs, complete: (arg) => getPathCompletions("ls", arg) },
+    { name: "pwd", usage: "pwd", run: doPwd },
+    {
+      name: "cd",
+      usage: "cd .. | cd ~ | cd / | cd projects | cd /projects",
+      run: doCd,
+      complete: (arg) => getPathCompletions("cd", arg),
+    },
+    { name: "cat", usage: "cat <path>", run: doCat, complete: (arg) => getPathCompletions("cat", arg) },
+    {
+      name: "xdg-open",
+      aliases: ["open"],
+      usage: "xdg-open <project> | open <project>",
+      run: doXdgOpen,
+      complete: (arg) => completeNames(Object.keys(projects), arg),
+    },
+    { name: "shakar", usage: "shakar", run: doShakar },
+    {
+      name: "startx",
+      usage: "startx <app>",
+      run: doStartx,
+      complete: (arg) => completeNames(Object.keys(guiApps), arg),
+    },
+    { name: "history", usage: "history [n]", run: doHistory },
+    { name: "home", usage: "home", run: doHome },
+    { name: "clear", usage: "clear", run: doClear },
+  ];
+  const commandsByName = new Map(COMMANDS.flatMap((command) =>
+    [command.name, ...(command.aliases || [])].map((name) => [name, command])
+  ));
+  const COMPLETABLE_COMMANDS = Array.from(commandsByName.keys()).sort();
+
+  function completeNames(names, prefix) {
+    return names
+      .filter((name) => name.startsWith(prefix))
+      .map((name) => ({ completion: name, display: name }));
+  }
+
+  function doHome() {
+    doClear();
+    setCwd("/", true);
+    return doLs();
+  }
+
   function doHelp() {
     appendLine("Available commands:", "muted");
-    appendLine("help | ?");
-    appendLine("ls [path]");
-    appendLine("pwd");
-    appendLine("cd .. | cd ~ | cd / | cd projects | cd /projects");
-    appendLine("cat <path>");
-    appendLine("xdg-open <project>");
-    appendLine("shakar");
-    appendLine("startx <app>");
-    appendLine("history [n]");
-    appendLine("home");
-    appendLine("clear");
+    for (const command of COMMANDS) {
+      appendLine(command.usage);
+    }
     appendLine("Use && to chain commands (example: cd /projects && ls)", "muted");
     return { ok: true };
   }
@@ -1738,51 +1776,9 @@
 
     const [name, ...rest] = trimmed.split(/\s+/);
     const arg = rest.join(" ");
-
-    if (name === "ls") {
-      return doLs(arg);
-    }
-
-    if (name === "pwd") {
-      return doPwd();
-    }
-
-    if (name === "clear") {
-      return doClear();
-    }
-
-    if (name === "cd") {
-      return doCd(arg);
-    }
-
-    if (name === "cat") {
-      return doCat(arg);
-    }
-
-    if (name === "startx") {
-      return doStartx(arg);
-    }
-
-    if (name === "shakar") {
-      return doShakar();
-    }
-
-    if (name === "xdg-open" || name === "open") {
-      return doXdgOpen(arg, name);
-    }
-
-    if (name === "history") {
-      return doHistory(arg);
-    }
-
-    if (name === "home") {
-      doClear();
-      setCwd("/", true);
-      return doLs();
-    }
-
-    if (name === "help" || name === "?") {
-      return doHelp();
+    const command = commandsByName.get(name);
+    if (command) {
+      return command.run(arg, name);
     }
 
     appendLine(`${name}: command not found`, "error");
@@ -2014,10 +2010,6 @@
     inputEl.setSelectionRange(value.length, value.length);
   }
 
-  const COMPLETABLE_COMMANDS = [
-    "cat", "cd", "clear", "help", "history", "home", "ls", "open", "pwd", "shakar", "startx", "xdg-open",
-  ];
-
   function longestCommonPrefix(strings) {
     if (!strings.length) {
       return "";
@@ -2133,22 +2125,8 @@
     const arg = afterCmd.trimStart();
     const argWs = afterCmd.slice(0, afterCmd.length - arg.length);
 
-    let entries;
-    if (cmdName === "xdg-open" || cmdName === "open") {
-      const projectNames = Object.keys(projects);
-      entries = projectNames
-        .filter((p) => p.startsWith(arg))
-        .map((p) => ({ completion: p, display: p }));
-    } else if (cmdName === "startx") {
-      const appNames = Object.keys(guiApps);
-      entries = appNames
-        .filter((a) => a.startsWith(arg))
-        .map((a) => ({ completion: a, display: a }));
-    } else if (cmdName === "cd" || cmdName === "ls" || cmdName === "cat") {
-      entries = getPathCompletions(cmdName, arg);
-    } else {
-      entries = [];
-    }
+    const command = commandsByName.get(cmdName);
+    const entries = command && command.complete ? command.complete(arg) : [];
 
     return {
       type: "argument",
