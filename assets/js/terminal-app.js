@@ -2506,6 +2506,10 @@
       }
 
       await delay(beforeEnterDelayMs());
+      if (renderToken !== latestRenderToken) {
+        return;
+      }
+
       isAnimating = false;
       submitTerminalForm({ synthetic: true });
     } finally {
