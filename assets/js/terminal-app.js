@@ -207,6 +207,7 @@
           url: "https://github.com/bkazemi/shakar/blob/master/grammar.ebnf",
           external: true,
         },
+        { label: "Try It Here", command: "shakar" },
       ],
     },
   };
@@ -1574,7 +1575,12 @@
         }
 
         const linkBarHtml = project.linkBar
-          .map((link) => buildAnchorHtml(link.url, link.label, link.external))
+          .map((link) => {
+            if (link.command) {
+              return `<a class="entry-link" href="${escapeHtml(toAppPath("/") + "?cmd=" + encodeURIComponent(link.command))}" data-action="command" data-command="${escapeHtml(link.command)}">${escapeHtml(link.label)}</a>`;
+            }
+            return buildAnchorHtml(link.url, link.label, link.external);
+          })
           .join(" | ");
         appendHTMLLine(linkBarHtml);
       }
@@ -2778,6 +2784,11 @@
       simulateRootFileClick(target.dataset.target, target.dataset.route || "");
     } else if (action === "cd") {
       runDirectoryClick(target.dataset.path || "");
+    } else if (action === "command") {
+      if (isAnimating || shakar.active || inputEl.disabled) {
+        return;
+      }
+      simulateTypeAndEnter(target.dataset.command, latestRenderToken);
     }
 
     setPrompt();
