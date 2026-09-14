@@ -1011,23 +1011,57 @@
     return row;
   }
 
+  function shuffledBackgammonChoices(choices) {
+    for (let index = choices.length - 1; index > 0; index--) {
+      const other = Math.floor(Math.random() * (index + 1));
+      [choices[index], choices[other]] = [choices[other], choices[index]];
+    }
+    return choices;
+  }
+
+  function findBackgammonMoves(points, color, dice) {
+    if (!dice.length) return [];
+    const direction = color === "blue" ? 1 : -1;
+    const choices = [];
+    for (let from = 6; from <= 17; from++) {
+      const to = from + direction * dice[0];
+      if (points[from].color !== color || !points[from].count || to < 6 || to > 17) continue;
+      // Keep every checker visible within five rows, without hits or a bar.
+      if (points[to].count >= 5 || (points[to].count && points[to].color !== color)) continue;
+      choices.push([from, to]);
+    }
+    for (const [from, to] of shuffledBackgammonChoices(choices)) {
+      const next = points.map((point) => ({ ...point }));
+      next[from].count--;
+      next[to] = { color, count: next[to].count + 1 };
+      const rest = findBackgammonMoves(next, color, dice.slice(1));
+      if (rest) return [[from, to], ...rest];
+    }
+    return null;
+  }
+
+  function randomBackgammonTurn(points, color, opening = false) {
+    const rolls = [];
+    for (let first = 1; first <= 6; first++) {
+      for (let second = 1; second <= 6; second++) {
+        if (opening && first === second) continue;
+        rolls.push(first === second ? [first, first, first, first] : [first, second]);
+      }
+    }
+    // Try both die orders. Only choose turns that use both dice (four for doubles).
+    for (const dice of shuffledBackgammonChoices(rolls)) {
+      const moves = findBackgammonMoves(points, color, dice);
+      if (moves) return { dice, moves };
+    }
+    return null;
+  }
+
   function renderBackgammonDemo(board) {
     const [top, bottom] = board.querySelectorAll(".backgammon-points");
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    // Blue advances toward higher indices; red decreases.
-    const turns = [
-      { dice: [3, 1], moves: [[11, 14], [16, 17]] },
-      { dice: [4, 2], moves: [[12, 8], [8, 6]] },
-      { dice: [5, 2], moves: [[11, 16], [11, 13]] },
-      { dice: [6, 1], moves: [[12, 6], [7, 6]] },
-      { dice: [4, 6], moves: [[11, 15], [11, 17]] },
-      { dice: [5, 3], moves: [[12, 7], [12, 9]] },
-    ];
-    // Pause before each turn and after the final move, then redraw the opening.
-    const frames = turns.flatMap((turn) => [null, ...turn.moves]);
-    frames.push(null);
     let points = initialBackgammonPoints();
-    let step = 0;
+    let color = Math.random() < 0.5 ? "blue" : "red";
+    let moves = randomBackgammonTurn(points, color, true).moves;
     const redraw = () => {
       renderBackgammonPoints(true, points, top);
       renderBackgammonPoints(false, points, bottom);
@@ -1035,14 +1069,20 @@
     redraw();
     const timer = window.setInterval(() => {
       if (document.hidden || motion.matches) return;
-      step = (step + 1) % frames.length;
-      if (step === 0) points = initialBackgammonPoints();
-      const move = frames[step];
-      if (move) {
-        const [from, to] = move;
+      if (!moves.length) {
+        color = color === "blue" ? "red" : "blue";
+        const turn = randomBackgammonTurn(points, color);
+        if (turn) {
+          moves = turn.moves;
+          return; // Leave a beat between turns.
+        }
+        points = initialBackgammonPoints();
+        color = Math.random() < 0.5 ? "blue" : "red";
+        moves = randomBackgammonTurn(points, color, true).moves;
+      } else {
+        const [from, to] = moves.shift();
         points[from].count--;
-        points[to].color = points[from].color;
-        points[to].count++;
+        points[to] = { color, count: points[to].count + 1 };
       }
       redraw();
     }, 2500);
