@@ -18,6 +18,7 @@ PAGES = {
     "projects/kabobagool/index.html": "kabobagool",
     "projects/shakar/index.html": "shakar",
     "projects/trop/index.html": "trop",
+    "projects/verity/index.html": "verity",
 }
 
 

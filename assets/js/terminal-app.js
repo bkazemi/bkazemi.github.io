@@ -108,6 +108,13 @@
   const SCRIPT_SUFFIX = "/assets/js/terminal-app.js";
 
   const projects = {
+    verity: {
+      name: "verity",
+      routePath: "/projects/verity",
+      padCatOutput: true,
+      verificationPill: true,
+      description: "Verity connects a site's local account to an external account, through explicit approval by whoever holds that account. Its live pill lets visitors inspect the account pair, who performed the verification, and whether the connection is still current.\n\nThe pills above link my author identity on this site to the external accounts I have approved. Verification is self-hosted by shirkadeh.org.",
+    },
     kabobagool: {
       name: "kabobagool",
       routePath: "/projects/kabobagool",
@@ -1558,6 +1565,15 @@
         }
       }
 
+      if (project.verificationPill) {
+        const host = document.createElement("div");
+        host.className = "line verity-pill";
+        outputEl.appendChild(host);
+        import(toAppPath("/assets/js/verity-embed.js"))
+          .then(({ mountVerityPills }) => mountVerityPills(host, toAppPath))
+          .catch(() => host.remove());
+      }
+
       const paragraphs = project.description.split("\n\n");
       for (const para of paragraphs) {
         appendLine(para, "desc-para");
@@ -2929,7 +2945,7 @@
     }
 
     const target = event.target;
-    if (target instanceof HTMLElement && target.closest("a,button,input,textarea,label")) {
+    if (target instanceof HTMLElement && target.closest("a,button,input,textarea,label,verity-badge,.verity-pill")) {
       return;
     }
 

@@ -23,3 +23,13 @@ python3 scripts/generate-pages.py --check
 
 The legacy redirects in `sw/` and the standalone Shakar playground are maintained
 separately.
+
+## Verity pill
+
+The Verity project page loads the distributed browser asset from `assets/verity.js`
+and reads its public connection IDs from `assets/verity-config.json`. Each ID in
+`connectionIds` renders one pill, whatever its provider. Create or renew a public
+connection on the verifier's owner page, then add or replace that ID and publish
+the site. Keep all owner and OAuth credentials on the backend.
+An empty `connectionIds` list hides the embed until the first connection is ready.
+Copy a fresh `dist/verity.js` from the Verity build when upgrading the component.

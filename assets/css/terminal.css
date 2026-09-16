@@ -121,6 +121,20 @@ body {
   margin-top: 0.8em;
 }
 
+.verity-pill {
+  --verity-surface: var(--bg-0);
+  --verity-text: var(--text);
+  --verity-muted: var(--muted);
+  --verity-border: #3e5b44;
+  --verity-hover: #142018;
+  --verity-font-family: "IBM Plex Mono", monospace;
+  --verity-font-size: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 0.8em;
+}
+
 .backgammon-board {
   width: fit-content;
   max-width: 100%;
