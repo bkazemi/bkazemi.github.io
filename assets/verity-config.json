@@ -1,6 +1,3 @@
 {
-  "backendUrl": "https://verity.shirkadeh.org/api/verity",
-  "connectionIds": [
-    "mtv2ChP2CnM8K9BZiSyhAhWOBRKWW4jMFyq3DgtgvJM"
-  ]
+  "backendUrl": "https://verity.shirkadeh.org/api/verity"
 }
