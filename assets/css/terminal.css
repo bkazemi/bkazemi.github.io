@@ -133,6 +133,8 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 0.8em;
+  /* One pill's height, held from the start so arriving pills push nothing down. */
+  min-height: 28px;
 }
 
 .backgammon-board {
