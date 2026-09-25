@@ -115,7 +115,7 @@
       verificationPill: true,
       description:
         "Verity is a self-hosted verifier for links between something a site controls and something held elsewhere. Neither side can create a link on its own.\n\n" +
-        "Each link has two ends. The near end is something the site is the authority on: one of its user accounts, one of its pages, or the site itself. The far end is an account at another provider or an OpenPGP key, and only its holder can prove it \u2014 by signing in to the provider, posting a proof somewhere only they can write, or signing a challenge with the key. A link is recorded only when the site's sign-in covers the near end and the far end has just been proved, in the same session.\n\n" +
+        "Each link has two ends. The near end is something the site is the authority on: one of its user accounts, one of its pages, or the site itself. The far end is an account at another provider or an OpenPGP key, and only its holder can prove it, by signing in to the provider, posting a proof somewhere only they can write, or signing a challenge with the key. A link is recorded only when the site's sign-in covers the near end and the far end has just been proved, in the same session.\n\n" +
         "The pill above is live: it shows the far end and whether the link is still verified, and opening it shows both ends with how and when each was established. Here the near end is shirkadeh.org itself, since the site has no other users.\n\n" +
         "Links are unlisted by default. Making one public later takes a fresh proof from the far end, and the far end's holder can remove it from the evidence page at any time, without the site's involvement.",
     },

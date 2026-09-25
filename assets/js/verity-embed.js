@@ -1,12 +1,20 @@
+// The published @bkazemi/verity browser script. The integrity hash makes the browser
+// refuse anything the CDN serves other than exactly this release; upgrading means
+// changing both lines.
+const ASSET_URL = "https://cdn.jsdelivr.net/npm/@bkazemi/verity@0.0.1/dist/verity.js";
+const ASSET_INTEGRITY = "sha384-xWl6piRY1EJNREw5lNz7FtJ8YrQd4+6xXlPXSc6lSf0cKre2959KLX+2zPiJtEJH";
+
 let assetReady;
 
-function loadAsset(toAppPath) {
+function loadAsset() {
   if (customElements.get("verity-badge")) return Promise.resolve();
   if (assetReady) return assetReady;
 
   assetReady = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = toAppPath("/assets/verity.js");
+    script.src = ASSET_URL;
+    script.integrity = ASSET_INTEGRITY;
+    script.crossOrigin = "anonymous";
     script.onload = resolve;
     script.onerror = () => {
       script.remove();
@@ -21,7 +29,7 @@ function loadAsset(toAppPath) {
 export async function mountVerityPills(host, toAppPath) {
   // The component only needs the page, not the backend, so it loads alongside the
   // evidence rather than after it.
-  const asset = loadAsset(toAppPath);
+  const asset = loadAsset();
   asset.catch(() => {});
 
   // A badge with nothing named yet draws its own frame and waits. The pill therefore

@@ -26,10 +26,10 @@ separately.
 
 ## Verity pill
 
-The Verity project page loads the distributed browser asset from `assets/verity.js`
-and reads its public connection IDs from `assets/verity-config.json`. Each ID in
-`connectionIds` renders one pill, whatever its provider. Create or renew a public
-connection on the verifier's owner page, then add or replace that ID and publish
-the site. Keep all owner and OAuth credentials on the backend.
-An empty `connectionIds` list hides the embed until the first connection is ready.
-Copy a fresh `dist/verity.js` from the Verity build when upgrading the component.
+The Verity project page loads the published `@bkazemi/verity` browser script from
+jsDelivr, pinned to a version and checked by its integrity hash (both set at the top
+of `assets/js/verity-embed.js`). It reads the backend address from
+`assets/verity-config.json` and shows one pill for each public connection the
+backend lists at `/published`, so adding or revoking a connection needs no change
+here. To upgrade, change the version and the hash together. Keep all owner and
+OAuth credentials on the backend.
