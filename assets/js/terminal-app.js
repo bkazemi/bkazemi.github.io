@@ -113,6 +113,9 @@
       routePath: "/projects/verity",
       padCatOutput: true,
       verificationPill: true,
+      linkBar: [
+        { label: "Project Page", url: "https://github.com/bkazemi/verity", external: true },
+      ],
       description:
         "Verity is a self-hosted verifier for links between something a site controls and something held elsewhere. Neither side can create a link on its own.\n\n" +
         "Each link has two ends. The near end is something the site is the authority on: one of its user accounts, one of its pages, or the site itself. The far end is an account at another provider or an OpenPGP key, and only its holder can prove it, by signing in to the provider, posting a proof somewhere only they can write, or signing a challenge with the key. A link is recorded only when the site's sign-in covers the near end and the far end has just been proved, in the same session.\n\n" +
