@@ -1,0 +1,61 @@
+name: Update Verity
+
+on:
+  schedule:
+    - cron: "23 10 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: update-verity
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.repository == 'bkazemi/bkazemi.github.io'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Test updater
+        run: python3 -B -m unittest discover -s scripts -p 'test_update_verity.py'
+
+      - name: Update and validate
+        run: |
+          python3 scripts/update-verity.py
+          node --input-type=module --check < assets/js/verity-embed.js
+          python3 scripts/generate-pages.py --check
+          git diff --check
+
+      - name: Commit and push update
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if git diff --quiet -- assets/js/verity-embed.js; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- assets/js/verity-embed.js
+          git commit -m 'chore(deps): update verity to latest'
+          git push origin "HEAD:$DEFAULT_BRANCH"
+
+      # GITHUB_TOKEN pushes do not trigger branch-based Pages builds. Check on
+      # every run so a failed build request can also recover without a new bump.
+      - name: Request Pages build if needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if build=$(gh api "repos/$GITHUB_REPOSITORY/pages/builds/latest"); then
+            if [ "$(jq -r '.commit' <<< "$build")" = "$(git rev-parse HEAD)" ] &&
+               [ "$(jq -r '.status' <<< "$build")" != 'errored' ]; then
+              exit 0
+            fi
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
