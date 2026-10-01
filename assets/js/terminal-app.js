@@ -255,6 +255,7 @@
   const STARTUP_POLL_INTERVAL_MS = 25;
   const SHAKAR_LEX_PROBE_TIMEOUT_MS = 1000;
   let latestRenderToken = 0;
+  let bootIntroEnd = null;
   const backgammonDemoCleanups = new Set();
   let isAnimating = false;
   let isSyntheticSubmit = false;
@@ -1435,9 +1436,13 @@
   }
 
   function doClear() {
+    bootIntroEnd = null;
+    screenEl.style.removeProperty("--boot-scroll-space");
     backgammonDemoCleanups.forEach((cleanup) => cleanup());
     backgammonDemoCleanups.clear();
     outputEl.textContent = "";
+    // Cancel any boot scroll and start replacement content at the top.
+    window.scrollTo({ top: 0, behavior: "instant" });
     return { ok: true };
   }
 
@@ -2597,10 +2602,11 @@
       appendCommand(routeCommand);
       runRouteCommand(routeCommand);
       inputEl.focus();
-      return;
+    } else {
+      await simulateTypeAndEnter(routeCommand, renderToken);
     }
 
-    await simulateTypeAndEnter(routeCommand, renderToken);
+    await skipBootIntroOnMobile(renderToken);
   }
 
   function runRouteCommand(routeCommand) {
@@ -2625,10 +2631,31 @@
     if (!canAnimate) {
       renderNotFound(pathname);
       inputEl.focus();
+    } else {
+      await simulateNotFoundSequence(pathname, renderToken);
+    }
+
+    await skipBootIntroOnMobile(renderToken);
+  }
+
+  async function skipBootIntroOnMobile(renderToken) {
+    await waitForLayoutFrames();
+    if (renderToken !== latestRenderToken || !bootIntroEnd?.isConnected ||
+        !window.matchMedia("(max-width: 700px)").matches ||
+        screenEl.style.display === "none") {
       return;
     }
 
-    await simulateNotFoundSequence(pathname, renderToken);
+    const page = document.scrollingElement;
+    if (!page || page.scrollHeight <= page.clientHeight + 1) {
+      return;
+    }
+
+    const content = bootIntroEnd.nextElementSibling || formEl;
+    const top = content.getBoundingClientRect().top + window.scrollY;
+    // Ensure there is enough scroll room to move the entire intro above the viewport.
+    screenEl.style.setProperty("--boot-scroll-space", `${top}px`);
+    window.scrollTo({ top, behavior: "smooth" });
   }
 
   function simulateProjectClick(slug) {
@@ -2716,6 +2743,7 @@
   function bootSession() {
     const nowMs = Date.now();
     const previousLoginMs = readLastLoginMs();
+    writeLastLoginMs(nowMs);
 
     appendLine("The programs included with this site are free software.", "muted");
     appendLine(`Welcome to ${host} (GNU/Linux 6.18.8 x86_64)`, "muted");
@@ -2728,8 +2756,7 @@
 
     appendLine("Type 'help' for available commands.", "muted");
     appendBlankLine();
-
-    writeLastLoginMs(nowMs);
+    bootIntroEnd = outputEl.lastElementChild;
   }
 
   function renderNotFound(pathname) {
@@ -2819,7 +2846,7 @@
     }
 
     setPrompt();
-    inputEl.focus();
+    inputEl.focus({ preventScroll: action === "project" || action === "cat" });
   });
 
   guiCloseBtn.addEventListener("click", () => {
