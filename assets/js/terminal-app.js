@@ -2680,8 +2680,7 @@
       syncPathForRoute(routePath, false);
     }
 
-    doClear();
-    appendCommand(`clear && cat ${target}`);
+    appendCommand(`cat ${target}`);
     runSingle(`cat ${target}`);
   }
 
