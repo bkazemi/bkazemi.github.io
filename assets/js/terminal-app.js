@@ -2878,7 +2878,10 @@
     }
     setPrompt();
     resizeInput();
-    inputEl.focus();
+    inputEl.focus({ preventScroll: !isSyntheticSubmit });
+    if (!isSyntheticSubmit && formEl.getBoundingClientRect().bottom > window.innerHeight) {
+      formEl.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
   });
 
   // Block all user-originated input (typing, paste, IME, autofill) while the
