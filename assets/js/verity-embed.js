@@ -73,14 +73,15 @@ export async function mountVerityPills(host, toAppPath) {
   const placed = await waiting;
   if (!host.isConnected) return;
 
-  // One pill per verified connection; the component picks its own provider mark. Each
-  // badge is handed the evidence just fetched, so it fills in what it is waiting for
-  // rather than asking the backend again for what is already here.
-  for (const [index, connection] of named.entries()) {
-    const badge = index === 0 && placed ? placed : document.createElement("verity-badge");
-    badge.evidence = connection;
-    badge.setAttribute("backend-url", config.backendUrl);
-    badge.setAttribute("connection-id", connection.id);
-    if (badge !== placed) host.appendChild(badge);
+  // One pill for every account: they are all this site's, so the component shows the
+  // first connected and counts the rest, and its dialog lists each on a card of its own.
+  const badge = placed ?? host.appendChild(document.createElement("verity-badge"));
+  badge.setAttribute("backend-url", config.backendUrl);
+  if (named.length === 1) {
+    // Handed the evidence just fetched, so it fills in without asking again.
+    badge.evidence = named[0];
+    badge.setAttribute("connection-id", named[0].id);
+  } else {
+    badge.setAttribute("connection-ids", named.map((connection) => connection.id).join(" "));
   }
 }
