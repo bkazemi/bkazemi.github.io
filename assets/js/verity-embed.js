@@ -1,8 +1,8 @@
 // The published @bkazemi/verity browser script. The integrity hash makes the browser
 // refuse anything the CDN serves other than exactly this release; upgrading means
 // changing both lines.
-const ASSET_URL = "https://cdn.jsdelivr.net/npm/@bkazemi/verity@0.0.11/dist/verity.js";
-const ASSET_INTEGRITY = "sha384-0yznpSvxRr6hBVC7Zq2yeKUmwDmzapa9QDkfwvmViIBfc8zTBNZNnDVf9BaoM0nU";
+const ASSET_URL = "https://cdn.jsdelivr.net/npm/@bkazemi/verity@0.0.12/dist/verity.js";
+const ASSET_INTEGRITY = "sha384-1WdO9/scI5BhvLRVtfIiE0Mjr4CEaxAw1muhY3HvZqdPP57uKzhhdg57Bs7Dhj+v";
 
 let assetReady;
 
