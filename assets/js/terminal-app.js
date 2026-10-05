@@ -108,16 +108,16 @@
   const SCRIPT_SUFFIX = "/assets/js/terminal-app.js";
 
   const projects = {
-    verity: {
-      name: "verity",
-      routePath: "/projects/verity",
+    verily: {
+      name: "verily",
+      routePath: "/projects/verily",
       padCatOutput: true,
       verificationPill: true,
       linkBar: [
-        { label: "Project Page", url: "https://github.com/bkazemi/verity", external: true },
+        { label: "Project Page", url: "https://github.com/bkazemi/verily", external: true },
       ],
       description:
-        "Verity is a self-hosted verifier for links between something a site controls and something held elsewhere. Neither side can create a link on its own.\n\n" +
+        "Verily is a self-hosted verifier for links between something a site controls and something held elsewhere. Neither side can create a link on its own.\n\n" +
         "Each link has two ends. The near end is something the site is the authority on: one of its user accounts, one of its pages, or the site itself. The far end is an account at another provider or an OpenPGP key, and only its holder can prove it, by signing in to the provider, posting a proof somewhere only they can write, or signing a challenge with the key. A link is recorded only when the site's sign-in covers the near end and the far end has just been proved, in the same session.\n\n" +
         "The pill above is live: it shows the far end and whether the link is still verified, and opening it shows both ends with how and when each was established. Here the near end is shirkadeh.org itself, since the site has no other users.\n\n" +
         "Links are unlisted by default. Making one public later takes a fresh proof from the far end, and the far end's holder can remove it from the evidence page at any time, without the site's involvement.",
@@ -1579,10 +1579,10 @@
 
       if (project.verificationPill) {
         const host = document.createElement("div");
-        host.className = "line verity-pill";
+        host.className = "line verily-pill";
         outputEl.appendChild(host);
-        import(toAppPath("/assets/js/verity-embed.js"))
-          .then(({ mountVerityPills }) => mountVerityPills(host, toAppPath))
+        import(toAppPath("/assets/js/verily-embed.js"))
+          .then(({ mountVerilyPills }) => mountVerilyPills(host, toAppPath))
           .catch(() => host.remove());
       }
 
@@ -2981,7 +2981,7 @@
     }
 
     const target = event.target;
-    if (target instanceof HTMLElement && target.closest("a,button,input,textarea,label,verity-badge,.verity-pill")) {
+    if (target instanceof HTMLElement && target.closest("a,button,input,textarea,label,verily-badge,.verily-pill")) {
       return;
     }
 

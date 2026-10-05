@@ -1,4 +1,4 @@
-name: Update Verity
+name: Update Verily
 
 on:
   schedule:
@@ -10,7 +10,7 @@ permissions:
   pages: write
 
 concurrency:
-  group: update-verity
+  group: update-verily
   cancel-in-progress: false
 
 jobs:
@@ -24,12 +24,12 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
 
       - name: Test updater
-        run: python3 -B -m unittest discover -s scripts -p 'test_update_verity.py'
+        run: python3 -B -m unittest discover -s scripts -p 'test_update_verily.py'
 
       - name: Update and validate
         run: |
-          python3 scripts/update-verity.py
-          node --input-type=module --check < assets/js/verity-embed.js
+          python3 scripts/update-verily.py
+          node --input-type=module --check < assets/js/verily-embed.js
           python3 scripts/generate-pages.py --check
           git diff --check
 
@@ -37,13 +37,13 @@ jobs:
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          if git diff --quiet -- assets/js/verity-embed.js; then
+          if git diff --quiet -- assets/js/verily-embed.js; then
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- assets/js/verity-embed.js
-          git commit -m 'chore(deps): update verity to latest'
+          git add -- assets/js/verily-embed.js
+          git commit -m 'chore(deps): update verily to latest'
           git push origin "HEAD:$DEFAULT_BRANCH"
 
       # GITHUB_TOKEN pushes do not trigger branch-based Pages builds. Check on

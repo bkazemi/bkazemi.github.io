@@ -24,16 +24,16 @@ python3 scripts/generate-pages.py --check
 The legacy redirects in `sw/` and the standalone Shakar playground are maintained
 separately.
 
-## Verity pill
+## Verily pill
 
-The Verity project page loads the published `@bkazemi/verity` browser script from
+The Verily project page loads the published `@bkazemi/verily` browser script from
 jsDelivr, pinned to a version and checked by its integrity hash (both set at the top
-of `assets/js/verity-embed.js`). It reads the backend address from
-`assets/verity-config.json` and shows one pill for each public connection the
+of `assets/js/verily-embed.js`). It reads the backend address from
+`assets/verily-config.json` and shows one pill for each public connection the
 backend lists at `/published`, so adding or revoking a connection needs no change
 here. Keep all owner and OAuth credentials on the backend.
 
-The `Update Verity` GitHub Actions workflow checks npm's `latest` tag daily at
+The `Update Verily` GitHub Actions workflow checks npm's `latest` tag daily at
 10:23 UTC, or on demand from the Actions tab. It verifies the npm archive checksum,
 compares the CDN script with the packaged script, checks JavaScript syntax, and
 commits the new version and integrity hash together. It follows stable releases,
@@ -49,5 +49,5 @@ The schedule takes effect once the workflow is pushed to the default branch.
 To update locally (Python 3 and Node.js required):
 
 ```sh
-python3 scripts/update-verity.py
+python3 scripts/update-verily.py
 ```

@@ -1,13 +1,13 @@
-// The published @bkazemi/verity browser script. The integrity hash makes the browser
+// The published @bkazemi/verily browser script. The integrity hash makes the browser
 // refuse anything the CDN serves other than exactly this release; upgrading means
 // changing both lines.
-const ASSET_URL = "https://cdn.jsdelivr.net/npm/@bkazemi/verity@0.0.12/dist/verity.js";
-const ASSET_INTEGRITY = "sha384-1WdO9/scI5BhvLRVtfIiE0Mjr4CEaxAw1muhY3HvZqdPP57uKzhhdg57Bs7Dhj+v";
+const ASSET_URL = "https://cdn.jsdelivr.net/npm/@bkazemi/verily@0.1.0/dist/verily.js";
+const ASSET_INTEGRITY = "sha384-Y8iN0EceBLPBFRwBEzyD/l/uqe19GAGp42rUY2XCVNNCMzjHNpgLz/s8IPveBIjk";
 
 let assetReady;
 
 function loadAsset() {
-  if (customElements.get("verity-badge")) return Promise.resolve();
+  if (customElements.get("verily-badge")) return Promise.resolve();
   if (assetReady) return assetReady;
 
   assetReady = new Promise((resolve, reject) => {
@@ -19,14 +19,14 @@ function loadAsset() {
     script.onerror = () => {
       script.remove();
       assetReady = undefined;
-      reject(new Error("Verity asset unavailable"));
+      reject(new Error("Verily asset unavailable"));
     };
     document.head.appendChild(script);
   });
   return assetReady;
 }
 
-export async function mountVerityPills(host, toAppPath) {
+export async function mountVerilyPills(host, toAppPath) {
   // The component only needs the page, not the backend, so it loads alongside the
   // evidence rather than after it.
   const asset = loadAsset();
@@ -36,21 +36,21 @@ export async function mountVerityPills(host, toAppPath) {
   // holds its place from the first paint, and only what the backend knows arrives later.
   const waiting = asset.then(() => {
     if (!host.isConnected) return null;
-    const badge = document.createElement("verity-badge");
+    const badge = document.createElement("verily-badge");
     host.appendChild(badge);
     return badge;
   });
   waiting.catch(() => {});
 
-  const response = await fetch(toAppPath("/assets/verity-config.json"), {
+  const response = await fetch(toAppPath("/assets/verily-config.json"), {
     credentials: "omit",
     cache: "no-store",
   });
-  if (!response.ok) throw new Error("Verity configuration unavailable");
+  if (!response.ok) throw new Error("Verily configuration unavailable");
 
   const config = await response.json();
   if (new URL(config.backendUrl).protocol !== "https:") {
-    throw new Error("Invalid Verity configuration");
+    throw new Error("Invalid Verily configuration");
   }
 
   // The backend names its own current public connections, so revoking or replacing
@@ -59,7 +59,7 @@ export async function mountVerityPills(host, toAppPath) {
     credentials: "omit",
     cache: "no-store",
   });
-  if (!published.ok) throw new Error("Verity backend unavailable");
+  if (!published.ok) throw new Error("Verily backend unavailable");
 
   const connections = await published.json();
   const named = Array.isArray(connections)
@@ -75,7 +75,7 @@ export async function mountVerityPills(host, toAppPath) {
 
   // One pill for every account: they are all this site's, so the component shows the
   // first connected and counts the rest, and its dialog lists each on a card of its own.
-  const badge = placed ?? host.appendChild(document.createElement("verity-badge"));
+  const badge = placed ?? host.appendChild(document.createElement("verily-badge"));
   badge.setAttribute("backend-url", config.backendUrl);
   if (named.length === 1) {
     // Handed the evidence just fetched, so it fills in without asking again.

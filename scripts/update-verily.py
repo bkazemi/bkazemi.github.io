@@ -14,13 +14,13 @@ from urllib.request import urlopen
 
 
 ROOT = Path(__file__).resolve().parent.parent
-EMBED = ROOT / "assets/js/verity-embed.js"
-REGISTRY = "https://registry.npmjs.org/@bkazemi%2fverity/latest"
-CDN = "https://cdn.jsdelivr.net/npm/@bkazemi/verity@{}/dist/verity.js"
+EMBED = ROOT / "assets/js/verily-embed.js"
+REGISTRY = "https://registry.npmjs.org/@bkazemi%2fverily/latest"
+CDN = "https://cdn.jsdelivr.net/npm/@bkazemi/verily@{}/dist/verily.js"
 VERSION = r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
 PIN = re.compile(
-    r'^const ASSET_URL = "https://cdn\.jsdelivr\.net/npm/@bkazemi/verity@'
-    r'([^/]+)/dist/verity\.js";$', re.MULTILINE
+    r'^const ASSET_URL = "https://cdn\.jsdelivr\.net/npm/@bkazemi/verily@'
+    r'([^/]+)/dist/verily\.js";$', re.MULTILINE
 )
 INTEGRITY = re.compile(r'^const ASSET_INTEGRITY = "[^"]+";$', re.MULTILINE)
 
@@ -45,24 +45,24 @@ def update(path=EMBED):
     source = path.read_text()
     pins = PIN.findall(source)
     if len(pins) != 1 or len(INTEGRITY.findall(source)) != 1:
-        raise ValueError("Expected exactly one Verity URL and integrity pin")
+        raise ValueError("Expected exactly one Verily URL and integrity pin")
     current = pins[0]
     metadata = json.loads(fetch(REGISTRY))
-    if metadata["name"] != "@bkazemi/verity":
+    if metadata["name"] != "@bkazemi/verily":
         raise ValueError("Unexpected npm package")
     version = metadata["version"]
     if version_tuple(version) < version_tuple(current):
-        raise ValueError(f"Refusing to downgrade Verity from {current} to {version}")
+        raise ValueError(f"Refusing to downgrade Verily from {current} to {version}")
     if version == current:
-        print(f"Verity is already at {version}")
+        print(f"Verily is already at {version}")
         return False
 
-    tarball_url = f"https://registry.npmjs.org/@bkazemi/verity/-/verity-{version}.tgz"
+    tarball_url = f"https://registry.npmjs.org/@bkazemi/verily/-/verily-{version}.tgz"
     archive_bytes = fetch(tarball_url)
     if sri(archive_bytes, "sha512") != metadata["dist"]["integrity"]:
         raise ValueError("npm package checksum mismatch")
     with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as archive:
-        member = archive.getmember("package/dist/verity.js")
+        member = archive.getmember("package/dist/verily.js")
         if not member.isfile():
             raise ValueError("Browser script is not a regular file")
         packaged = archive.extractfile(member).read()
@@ -73,7 +73,7 @@ def update(path=EMBED):
         raise ValueError("CDN script does not match the npm release")
     # Parse the script without executing package code or installing dependencies.
     with tempfile.TemporaryDirectory() as directory:
-        script = Path(directory) / "verity.js"
+        script = Path(directory) / "verily.js"
         script.write_bytes(browser)
         subprocess.run(["node", "--check", str(script)], check=True)
 
@@ -82,7 +82,7 @@ def update(path=EMBED):
         f'const ASSET_INTEGRITY = "{sri(browser, "sha384")}";', updated
     )
     path.write_text(updated)
-    print(f"Updated Verity from {current} to {version}")
+    print(f"Updated Verily from {current} to {version}")
     return True
 
 

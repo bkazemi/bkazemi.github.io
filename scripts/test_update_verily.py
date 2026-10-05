@@ -12,13 +12,13 @@ from unittest.mock import patch
 
 
 spec = importlib.util.spec_from_file_location(
-    "update_verity", Path(__file__).with_name("update-verity.py")
+    "update_verily", Path(__file__).with_name("update-verily.py")
 )
 updater = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(updater)
 
 
-class UpdateVerityTests(unittest.TestCase):
+class UpdateVerilyTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -29,15 +29,15 @@ class UpdateVerityTests(unittest.TestCase):
             '// Keep the rest of the embed unchanged.\n'
         )
         self.path.write_text(self.original)
-        self.browser = b'customElements.define("verity-badge", class extends HTMLElement {});'
+        self.browser = b'customElements.define("verily-badge", class extends HTMLElement {});'
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
-            member = tarfile.TarInfo("package/dist/verity.js")
+            member = tarfile.TarInfo("package/dist/verily.js")
             member.size = len(self.browser)
             archive.addfile(member, io.BytesIO(self.browser))
         self.archive = buffer.getvalue()
         self.metadata = {
-            "name": "@bkazemi/verity",
+            "name": "@bkazemi/verily",
             "version": "0.0.5",
             "dist": {"integrity": updater.sri(self.archive, "sha512")},
         }
